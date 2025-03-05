@@ -104,43 +104,48 @@ if __name__ == "__main__":
 
 
 
+
+
+
+
+
+
+
 from typing import Optional
 import torch
 from PIL import Image
 import io
 import base64
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi.responses import JSONResponse
 import pyautogui
 from util.utils import check_ocr_box, get_yolo_model, get_caption_model_processor, get_som_labeled_img
 
-# Initialize Flask app
-app = Flask(__name__)
+# Initialize FastAPI app
+app = FastAPI()
 
-# Initialize models
+# Initialize models (consider moving model loading to startup event for better performance)
 yolo_model = get_yolo_model(model_path='weights/icon_detect/model.pt')
 caption_model_processor = get_caption_model_processor(model_name="florence2", model_name_or_path="weights/icon_caption_florence")
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-@app.route('/process', methods=['POST'])
-def process():
+@app.post("/process")
+async def process(
+    image: UploadFile = File(...),
+    box_threshold: float = Form(0.05),
+    iou_threshold: float = Form(0.1),
+    use_paddleocr: bool = Form(True),
+    imgsz: int = Form(640)
+):
     try:
-        if 'image' not in request.files:
-            return jsonify({'error': 'No image file provided'}), 400
-        
-        image_file = request.files['image']
-        image_input = Image.open(image_file)
+        # Read image file contents
+        contents = await image.read()
+        image_input = Image.open(io.BytesIO(contents))
         width, height = image_input.size  # Get image dimensions
         
-        box_threshold = float(request.form.get('box_threshold', 0.05))
-        iou_threshold = float(request.form.get('iou_threshold', 0.1))
-        use_paddleocr = request.form.get('use_paddleocr', 'true').lower() == 'true'
-        imgsz = int(request.form.get('imgsz', 640))
-
         image_save_path = "imgs/saved_image_demo.png"
         image_input.save(image_save_path)
         
-        image = Image.open(image_save_path)
-
         ocr_bbox_rslt, is_goal_filtered = check_ocr_box(
             image_save_path, 
             display_img=False, 
@@ -178,12 +183,13 @@ def process():
                     "click_point": (center_x, center_y)  # Central point for pyautogui click
                 })
 
-        return jsonify({
+        return JSONResponse(content={
             "elements": elements
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=7861)
+    import uvicorn
+    uvicorn.run(app, host='0.0.0.0', port=7861)
