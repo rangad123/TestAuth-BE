@@ -1,0 +1,28 @@
+# Ignore Python files
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.sqlite3
+Procfile
+runtime.txt
+
+# Environment settings
+.env
+
+# Ignore virtual environments
+venv/
+env/
+
+# Django-specific files
+*.log
+*.pot
+*.py[co]
+.DS_Store
+db.sqlite3
+*.migrations/
+
+# Ignore IDE/editor files
+.vscode/
+.idea/
+*.swp

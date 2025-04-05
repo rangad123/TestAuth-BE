@@ -1,0 +1,48 @@
+<svg viewBox="0 0 1200 900" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circles -->
+  <circle cx="300" cy="225" r="12" fill="#e2e8f0" opacity="0.6"/>
+  <circle cx="900" cy="600" r="12" fill="#e2e8f0" opacity="0.6"/>
+  <circle cx="1050" cy="300" r="12" fill="#e2e8f0" opacity="0.6"/>
+  <circle cx="150" cy="675" r="12" fill="#e2e8f0" opacity="0.6"/>
+  
+  <!-- Main gear representing automation -->
+  <g transform="translate(600,450) scale(2.5)">
+    <path d="M0,-160 A160,160 0 1,1 0,160 A160,160 0 1,1 0,-160 Z" fill="#6b21a8" opacity="0.1"/>
+    <path d="M0,-120 A120,120 0 1,1 0,120 A120,120 0 1,1 0,-120 Z" fill="#7c3aed" opacity="0.2"/>
+    <g transform="rotate(0)">
+      <path d="M-20,-140 L20,-140 L30,-110 L-30,-110 Z" fill="#7c3aed"/>
+    </g>
+    <g transform="rotate(60)">
+      <path d="M-20,-140 L20,-140 L30,-110 L-30,-110 Z" fill="#7c3aed"/>
+    </g>
+    <g transform="rotate(120)">
+      <path d="M-20,-140 L20,-140 L30,-110 L-30,-110 Z" fill="#7c3aed"/>
+    </g>
+    <g transform="rotate(180)">
+      <path d="M-20,-140 L20,-140 L30,-110 L-30,-110 Z" fill="#7c3aed"/>
+    </g>
+    <g transform="rotate(240)">
+      <path d="M-20,-140 L20,-140 L30,-110 L-30,-110 Z" fill="#7c3aed"/>
+    </g>
+    <g transform="rotate(300)">
+      <path d="M-20,-140 L20,-140 L30,-110 L-30,-110 Z" fill="#7c3aed"/>
+    </g>
+  </g>
+  
+  <!-- Robot icon representing AI -->
+  <g transform="translate(600,450) scale(1.5)">
+    <rect x="-40" y="-30" width="80" height="60" rx="10" fill="#7c3aed"/>
+    <circle cx="-15" cy="-10" r="8" fill="white"/>
+    <circle cx="15" cy="-10" r="8" fill="white"/>
+    <path d="M-20,15 L20,15" stroke="white" stroke-width="4" stroke-linecap="round"/>
+    <text x="0" y="80" text-anchor="middle" fill="#4c1d95" font-family="Arial" font-weight="bold" font-size="32">TesterAlly</text>
+  </g>
+  
+  <!-- Code symbols -->
+  <g transform="translate(300,300) scale(1.5)" fill="#7c3aed" opacity="0.3">
+    <text x="0" y="0" font-family="monospace" font-size="36">{}</text>
+  </g>
+  <g transform="translate(900,600) scale(1.5)" fill="#7c3aed" opacity="0.3">
+    <text x="0" y="0" font-family="monospace" font-size="36">&lt;/&gt;</text>
+  </g>
+</svg>
