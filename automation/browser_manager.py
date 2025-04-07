@@ -67,7 +67,6 @@ def open_browser(user_id, url):
             # Launch Chrome with process priority
             process = subprocess.Popen([
                 BROWSER_PATH,
-                f"--user-data-dir={profile_path}",
                 "--new-window",
                 "--start-maximized",
                 "--disable-session-crashed-bubble",
@@ -78,7 +77,6 @@ def open_browser(user_id, url):
             # For non-Windows platforms
             process = subprocess.Popen([
                 BROWSER_PATH,
-                f"--user-data-dir={profile_path}",
                 "--new-window",
                 "--start-maximized",
                 "--disable-session-crashed-bubble",
