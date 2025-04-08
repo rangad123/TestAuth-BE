@@ -35,13 +35,6 @@ if sys.platform == 'win32':
     SPI_SETFOREGROUNDLOCKTIMEOUT = 0x2001
 
 
-def get_unique_profile_path(user_id):
-    """Generate a unique profile path for Chrome to prevent profile conflicts"""
-    random_suffix = str(random.randint(1000, 9999))
-    profile_dir = f"./chrome-user-{user_id}-{random_suffix}"
-    return profile_dir
-
-
 def open_browser(user_id, url):
     """Opens a new Chrome browser window and tracks its title and process ID."""
     print(f"[INFO] Opening URL {url} for user {user_id}")
@@ -52,7 +45,6 @@ def open_browser(user_id, url):
         user_sessions[user_id]['last_active'] = time.time()
 
     initial_windows = get_chrome_windows()
-    profile_path = get_unique_profile_path(user_id)
 
     try:
         # Create process with startupinfo to ensure it appears in foreground
@@ -67,7 +59,6 @@ def open_browser(user_id, url):
             # Launch Chrome with process priority
             process = subprocess.Popen([
                 BROWSER_PATH,
-                f"--user-data-dir={profile_path}",
                 "--new-window",
                 "--start-maximized",
                 "--disable-session-crashed-bubble",
@@ -78,7 +69,6 @@ def open_browser(user_id, url):
             # For non-Windows platforms
             process = subprocess.Popen([
                 BROWSER_PATH,
-                f"--user-data-dir={profile_path}",
                 "--new-window",
                 "--start-maximized",
                 "--disable-session-crashed-bubble",
