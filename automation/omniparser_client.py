@@ -5,6 +5,7 @@ import replicate
 import sys
 import os
 import time
+import numpy as np  # Added for padding
 from django.http import JsonResponse
 from django.conf import settings
 
@@ -25,9 +26,21 @@ def send_to_omniparser(screenshot_path):
 
         # Get image dimensions
         height, width, _ = img.shape
-
         print(f"[INFO] Image Loaded: {screenshot_path}")
-        print(f"[INFO] Image Dimensions: {width}x{height}")
+        print(f"[INFO] Original Image Dimensions: {width}x{height}")
+
+        # PAD image from 1920x1080 to 1920x1200
+        if width == 1920 and height == 1080:
+            padding_height = 120
+            black_padding = np.zeros((padding_height, width, 3), dtype=np.uint8)
+            img = cv2.vconcat([img, black_padding])  # Add black padding at the bottom
+            height += padding_height
+            print(f"[INFO] Image Padded to: {width}x{height}")
+
+            # Save the padded image to a temporary path
+            padded_path = os.path.join(settings.BASE_DIR, "temp_padded_screenshot.jpg")
+            cv2.imwrite(padded_path, img)
+            screenshot_path = padded_path
 
         # Start Timer
         start_time = time.time()
@@ -68,7 +81,7 @@ def send_to_omniparser(screenshot_path):
             # Parse bbox coordinates
             bbox = [float(coord.strip()) for coord in bbox_str.split(',')]
 
-            # Convert relative coordinates to absolute
+            # Convert relative coordinates to absolute (based on new 1200px height)
             abs_coords = [int(bbox[0] * width), int(bbox[1] * height),
                           int(bbox[2] * width), int(bbox[3] * height)]
 

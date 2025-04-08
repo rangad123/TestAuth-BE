@@ -23,7 +23,7 @@ from django.http import JsonResponse
 from .browser_manager import open_browser, update_window_title
 from .screenshot_manager import take_screenshot
 from .omniparser_client import send_to_omniparser
-from .ui_action import perform_ui_action
+from .ui_action import perform_ui_action, Execute_ui_action
 from .session_manager import user_sessions
 from .window_utils import get_chrome_windows
 
@@ -1039,6 +1039,131 @@ def handle_command(request):
                 return JsonResponse({"error": "No target element specified for typing"}, status=400)
 
             action_response = perform_ui_action(user_id, action, element_name, click_X, click_Y, type_text)
+            return JsonResponse(action_response, safe=False)
+
+        return JsonResponse({"error": "Unknown command"}, status=400)
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON format"}, status=400)
+    except Exception as e:
+        print(f"[ERROR] Unexpected error: {e}")
+        traceback.print_exc()
+        return JsonResponse({"error": f"Internal server error: {str(e)}"}, status=500)
+
+
+#Test Execution 
+@csrf_exempt
+def Execute_command(request):
+    """Handle API commands for automation"""
+    if request.method != "POST":
+        return JsonResponse({"error": "Invalid request method"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        command = data.get("command")
+        click_X = data.get("click_x")
+        click_Y = data.get("click_y")
+        type_text = data.get("text")
+        user_id = data.get("user_id")
+
+        # Validate required parameters
+        if not command:
+            return JsonResponse({"error": "No command provided"}, status=400)
+        if not user_id:
+            return JsonResponse({"error": "No user_id provided"}, status=400)
+
+        print(f"[INFO] Received command: {command} from user: {user_id}")
+
+        # Handling "open" command
+        if command.startswith("open "):
+            url = command.split(" ", 1)[1]
+            # Ensure URL has protocol
+            if not url.startswith(('http://', 'https://')):
+                url = 'https://' + url
+
+            try:
+                if open_browser(user_id, url):
+                    print("[INFO] Browser successfully opened")
+                    # Wait additional time for page to load
+                    time.sleep(5)
+
+                    if user_id in user_sessions and 'current_window' in user_sessions[user_id]:
+                        current_window_key = user_sessions[user_id]['current_window']
+                        print(f"[DEBUG] After browser open - current window key: {current_window_key}")
+                        update_window_title(user_id, current_window_key)
+
+                    # Take screenshot
+                    screenshot_path, screenshot_url = take_screenshot(user_id, url)
+
+                    # Get active window details for debugging
+                    active_window_title = "Unknown"
+                    try:
+                        active_window = gw.getActiveWindow()
+                        if active_window:
+                            active_window_title = active_window.title
+                    except:
+                        pass
+
+                    if screenshot_path:
+
+                        # List all chrome windows for debugging
+                        chrome_windows = [w['title'] for w in get_chrome_windows()]
+
+                        return JsonResponse({
+                            "status": "browser opened",
+                            "url": url,
+                            "screenshot": screenshot_url,
+                            "active_window": active_window_title,
+                            "chrome_windows": chrome_windows,
+                            "tracked_windows": {url: info['title'] for url, info in user_sessions[user_id][
+                                'windows'].items()} if user_id in user_sessions else {},
+                        })
+                    else:
+                        return JsonResponse({
+                            "error": "Failed to take screenshot",
+                            "active_window": active_window_title
+                        }, status=500)
+                else:
+                    return JsonResponse({"error": "Failed to open browser"}, status=500)
+
+            except Exception as e:
+                print(f"[ERROR] Error opening browser: {e}")
+                traceback.print_exc()
+                return JsonResponse({"error": f"Failed to open browser: {str(e)}"}, status=500)
+
+        # Handling "click" command
+        elif command.startswith("click "):
+            parts = command.split(" ", 1)
+            if len(parts) < 2:
+                return JsonResponse({"error": "Invalid click command format"}, status=400)
+
+            action, element_name = parts[0], parts[1]
+            if not element_name:
+                return JsonResponse({"error": "No element specified for clicking"}, status=400)
+
+            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            return JsonResponse(action_response)
+
+        # Handling "type" and "enter" commands
+        elif command.startswith("type ") or command.startswith("enter "):
+            parts = command.split(" ", 1)
+            if len(parts) < 2:
+                return JsonResponse({"error": "Invalid command format."}, status=400)
+
+            action = parts[0]
+            type_command = parts[1]
+
+            in_index = type_command.find(" in ")
+            if in_index == -1:
+                return JsonResponse({"error": "Invalid format. Use: type <text> in <element>"}, status=400)
+
+            type_text = type_command[:in_index]
+            element_name = type_command[in_index + 4:]
+
+            if not element_name:
+                return JsonResponse({"error": "No target element specified for typing"}, status=400)
+
+            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, type_text)
             return JsonResponse(action_response, safe=False)
 
         return JsonResponse({"error": "Unknown command"}, status=400)
