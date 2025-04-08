@@ -156,3 +156,14 @@ class RequirementType(models.Model):
 
     def __str__(self):
         return self.type_name
+
+
+class EXEDownload(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='EXEDownload',null=False, blank=False)
+    download_count = models.PositiveIntegerField(default=1)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(null=True, blank=True)
+    last_downloaded = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.name} - {self.download_count} downloads"

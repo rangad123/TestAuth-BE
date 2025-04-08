@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 from .views import ProjectViewSet,TestCaseViewSet,TestSuiteViewSet,RequirementViewSet
-from .views import RegisterView, LoginView, ForgotPasswordView, ResetPasswordView
+from .views import RegisterView, LoginView, ForgotPasswordView, ResetPasswordView, TrackDownloadView
 from .views import TestCaseTypeViewSet, TestCasePriorityViewSet, RequirementTypeViewSet, SendInvitationView, AcceptInvitationView, TestStepViewSet
 from .views import UserListView, ProjectListView, TestCaseListView, TestSuiteListView, RequirementListView, RoleView
 from .views import OrganizationView, OrganizationProjectsView, ProjectMembersView, TestDataView, UserProjectDataView, OrganizationProjectDetailsView
@@ -36,7 +36,7 @@ urlpatterns = [
     path('testdata/<int:project_id>/', TestDataView.as_view(), name='testdata'),
     path('user-projects/<int:user_id>/', UserProjectDataView.as_view(), name='user-project-data'),
     path('organization/<int:organization_id>/projects/', OrganizationProjectDetailsView.as_view(), name='organization-projects'),
-
+    path('track-download/', TrackDownloadView.as_view(), name='track-download'),
 ]
 
 # Include router URLs for viewsets
