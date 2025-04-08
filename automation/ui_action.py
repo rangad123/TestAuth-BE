@@ -307,5 +307,4 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
     except Exception as e:
         print(f"[ERROR] Action failed: {e}")
         traceback.print_exc()
-        return {"error": f"Action failed: {str(e)}"}
-
+    return {"error": f"Action failed: {str(e)}"}
