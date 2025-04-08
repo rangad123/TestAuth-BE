@@ -12,21 +12,21 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from rest_framework import viewsets
-from rest_framework import status
+from rest_framework import status, permissions
 from django.db.models import Prefetch
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.decorators import action
 from django.core.mail import send_mail
 from .models import Project, TestCase, TestSuite, Requirement, TestData, TestStep
-from .models import TestCaseType, TestCasePriority, RequirementType
+from .models import TestCaseType, TestCasePriority, RequirementType, EXEDownload
 from .serializers import TestCaseTypeSerializer, TestCasePrioritySerializer, RequirementTypeSerializer, ProjectInvitationSerializer, ProjectMemberSerializer
 from .serializers import ProjectSerializer, TestCaseSerializer, TestSuiteSerializer, RequirementSerializer, RoleSerializer, TestDataSerializer, BulkTestStepSerializer
 from django.contrib.sites.shortcuts import get_current_site
 import uuid
 import secrets
 from .models import User, Role, ProjectInvitation, ProjectMember
-from .serializers import UserSerializer
+from .serializers import UserSerializer, EXEDownloadSerializer
 
 
 class RoleView(APIView):
@@ -733,10 +733,56 @@ class ProtectedView(APIView):
         )
 
 
+class TrackDownloadView(APIView):
+    permission_classes = []  # Allow all
 
+    def post(self, request):
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'error': 'user_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
+        ip = request.META.get('REMOTE_ADDR')
+        user_agent = request.META.get('HTTP_USER_AGENT')
 
+        existing = EXEDownload.objects.filter(user=user).last()
+        if existing:
+            existing.download_count += 1
+            existing.ip_address = ip
+            existing.user_agent = user_agent
+            existing.save()
+            serializer = EXEDownloadSerializer(existing)
+        else:
+            new_download = EXEDownload.objects.create(
+                user=user,
+                ip_address=ip,
+                user_agent=user_agent
+            )
+            serializer = EXEDownloadSerializer(new_download)
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    
+    def get(self, request):
+        user_id = request.query_params.get('user_id')
+        if not user_id:
+            return Response({'error': 'user_id query param is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            download = EXEDownload.objects.get(user=user)
+            serializer = EXEDownloadSerializer(download)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except EXEDownload.DoesNotExist:
+            return Response({'message': 'No download record found for this user'}, status=status.HTTP_404_NOT_FOUND)
 
 
 
