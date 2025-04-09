@@ -1175,3 +1175,49 @@ def Execute_command(request):
         traceback.print_exc()
         return JsonResponse({"error": f"Internal server error: {str(e)}"}, status=500)
 
+
+
+
+
+
+
+
+
+
+
+
+import requests
+import socket
+import platform
+import uuid
+import os
+
+# AWS Deployed API URL
+TRACKING_SERVER_URL = "https://your-domain.com/api/track"
+
+def get_system_info():
+    """ Get system details """
+    return {
+        "os": platform.system(),
+        "os_version": platform.version(),
+        "processor": platform.processor(),
+        "machine": platform.machine(),
+        "mac_address": ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) for elements in range(0,2*6,2)][::-1])
+    }
+
+def track_event(event_type):
+    """ Send tracking data to AWS API """
+    data = {
+        "user_id": os.getlogin(),  # Get logged-in username
+        "system_info": get_system_info()
+    }
+    url = f"{TRACKING_SERVER_URL}/{event_type}/"
+    try:
+        response = requests.post(url, json=data)
+        print(f"Tracking {event_type}: {response.json()}")
+    except Exception as e:
+        print(f"Failed to track {event_type}: {e}")
+
+track_event("install")
+track_event("run")
+track_event("uninstall")
