@@ -1185,7 +1185,7 @@ def Execute_command(request):
 
 
 
-
+'''
 import requests
 import socket
 import platform
@@ -1221,3 +1221,5 @@ def track_event(event_type):
 track_event("install")
 track_event("run")
 track_event("uninstall")
+'''
+
