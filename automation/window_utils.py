@@ -238,65 +238,111 @@ def activate_window(window_info):
         # Disable focus stealing prevention
         disable_focus_stealing_prevention()
 
-        # Try using pygetwindow first as it handles fullscreen better
+        # Try using direct Windows API approach first (most reliable)
+        if hwnd:
+            try:
+                # Get thread IDs
+                foreground_hwnd = user32.GetForegroundWindow()
+                curr_thread = win32api.GetCurrentThreadId()
+                fore_thread = user32.GetWindowThreadProcessId(foreground_hwnd, None)
+
+                # Attach thread input to bypass focus restrictions
+                attached = False
+                if curr_thread != fore_thread:
+                    attached = user32.AttachThreadInput(curr_thread, fore_thread, True)
+                    if attached:
+                        print("[INFO] Successfully attached thread input")
+
+                try:
+                    # Step 1: Change window state to reset any fullscreen/maximized states
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                    time.sleep(0.2)
+
+                    # Step 2: Give window focus using multiple methods
+                    user32.BringWindowToTop(hwnd)
+                    result = user32.SetForegroundWindow(hwnd)
+                    user32.SetActiveWindow(hwnd)
+                    user32.SetFocus(hwnd)
+
+                    # Step 3: If needed, use the LockSetForegroundWindow override
+                    if not result:
+                        user32.LockSetForegroundWindow(0)  # 0 = LSFW_UNLOCK
+                        user32.SetForegroundWindow(hwnd)
+
+                    # Step 4: Handle maximized state if it was maximized
+                    if window_info.get('isMaximized'):
+                        time.sleep(0.2)
+                        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+
+                    # Verify success
+                    time.sleep(0.5)
+                    active_hwnd = user32.GetForegroundWindow()
+                    if active_hwnd == hwnd:
+                        print(f"[INFO] Successfully activated window using hwnd: {title}")
+                        return True
+                    else:
+                        print(f"[WARN] Direct activation failed. Current={active_hwnd}, Target={hwnd}")
+                finally:
+                    # Always detach threads if attached
+                    if attached:
+                        user32.AttachThreadInput(curr_thread, fore_thread, False)
+                        print("[INFO] Detached thread input")
+
+                # Fallback: Try minimize-restore cycle only for the target window
+                print("[INFO] Trying minimize-restore cycle...")
+                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                time.sleep(0.5)
+                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                time.sleep(0.3)
+                win32gui.SetForegroundWindow(hwnd)
+                time.sleep(0.2)
+
+                # Check if window is now active
+                active_hwnd = user32.GetForegroundWindow()
+                if active_hwnd == hwnd:
+                    print(f"[INFO] Successfully activated window using minimize-restore: {title}")
+                    return True
+
+            except Exception as e:
+                print(f"[ERROR] Failed to activate with hwnd: {e}")
+                traceback.print_exc()
+
+        # Try using pygetwindow as backup
         if window_obj:
             try:
-                # First minimize all Chrome windows to exit fullscreen
-                chrome_windows = [w for w in gw.getWindowsWithTitle("Chrome") if w is not None]
-                for window in chrome_windows:
-                    try:
-                        if window.isMaximized:
-                            print(f"[INFO] Minimizing window: {window.title}")
-                            window.minimize()
-                            time.sleep(0.5)
-                    except Exception as e:
-                        print(f"[WARN] Failed to minimize window: {e}")
-
-                # Then minimize our target window just to be sure
-                time.sleep(0.5)
-                window_obj.minimize()
+                # Try direct activation first
+                window_obj.activate()
                 time.sleep(0.5)
 
-                # Now restore and maximize it
-                window_obj.restore()
-                time.sleep(0.5)
-                window_obj.maximize()
-                time.sleep(0.5)
-
-                # Verify activation
+                # Check if we succeeded
                 active_window = gw.getActiveWindow()
                 if active_window and active_window.title == title:
-                    print(f"[INFO] Successfully activated window with pygetwindow: {title}")
+                    print(f"[INFO] Successfully activated window with direct pygetwindow: {title}")
+                    return True
+
+                # If not successful, try minimize-restore cycle only for this window
+                print("[INFO] Direct pygetwindow activation failed, trying minimize-restore")
+                window_obj.minimize()
+                time.sleep(0.5)
+                window_obj.restore()
+                time.sleep(0.3)
+
+                # If it was maximized, maximize it again
+                if window_info.get('isMaximized'):
+                    time.sleep(0.2)
+                    window_obj.maximize()
+
+                # Verify activation
+                time.sleep(0.5)
+                active_window = gw.getActiveWindow()
+                if active_window and active_window.title == title:
+                    print(f"[INFO] Successfully activated window with pygetwindow cycle: {title}")
                     return True
             except Exception as e:
                 print(f"[ERROR] Failed to activate with pygetwindow: {e}")
+                traceback.print_exc()
 
-        # Try using the window handle as backup
-        if hwnd:
-            try:
-                # First minimize the window
-                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-                time.sleep(0.5)
-
-                # Then restore and maximize
-                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                time.sleep(0.5)
-                win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
-                time.sleep(0.5)
-
-                # Set as foreground window
-                win32gui.SetForegroundWindow(hwnd)
-
-                # Verify success
-                active_hwnd = user32.GetForegroundWindow()
-                if active_hwnd == hwnd:
-                    print(f"[INFO] Successfully activated window using hwnd: {title}")
-                    return True
-            except Exception as e:
-                print(f"[ERROR] Failed to activate with hwnd: {e}")
-
-    # As a last resort, try alt-tab technique on Windows
-    if sys.platform == 'win32':
+        # As a last resort, try simulated key presses
         try:
             # Simulate Alt+Tab press
             print("[INFO] Trying Alt+Tab technique...")
@@ -312,11 +358,30 @@ def activate_window(window_info):
             if active_window and (title in active_window.title):
                 print(f"[INFO] Successfully activated with Alt+Tab: {active_window.title}")
                 return True
+
+            # One more extreme measure - try Windows+D to show desktop then Alt+Tab
+            print("[INFO] Trying Windows+D then Alt+Tab...")
+            pyautogui.hotkey('win', 'd')
+            time.sleep(0.5)
+            pyautogui.keyDown('alt')
+            time.sleep(0.1)
+            pyautogui.press('tab')
+            time.sleep(0.5)
+            pyautogui.keyUp('alt')
+            time.sleep(0.5)
+
+            # Check again
+            active_window = gw.getActiveWindow()
+            if active_window and (title in active_window.title):
+                print(f"[INFO] Successfully activated with Windows+D and Alt+Tab: {active_window.title}")
+                return True
         except Exception as e:
-            print(f"[ERROR] Alt+Tab technique failed: {e}")
+            print(f"[ERROR] Keypress techniques failed: {e}")
+            traceback.print_exc()
 
     print(f"[ERROR] All activation techniques failed for window: {title}")
     return False
+
 
 def update_window_title(user_id, window_key=None):
     """Update stored window title after navigation actions"""
@@ -357,8 +422,8 @@ import time
 def activate_user_window(user_id, url=None):
     """Activate the correct window for a user's session based on window_key."""
     if user_id not in user_sessions:
-        print(f"[WARN] No active sessions for user {user_id}")
-        return False
+        print(f"[INFO] Creating new session for user {user_id}")
+        user_sessions[user_id] = {'last_active': time.time(), 'windows': {}}
 
     session_data = user_sessions[user_id]
     windows = session_data.get('windows', {})

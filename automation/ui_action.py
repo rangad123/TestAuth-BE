@@ -29,20 +29,6 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
     if sys.platform == 'win32':
         disable_focus_stealing_prevention()
 
-    # First, try to minimize all Chrome windows to handle fullscreen issues
-    try:
-        chrome_windows = gw.getWindowsWithTitle("Chrome")
-        for window in chrome_windows:
-            try:
-                if window.isMaximized:
-                    window.minimize()
-                    time.sleep(0.2)
-            except Exception as e:
-                print(f"[WARN] Failed to minimize Chrome window: {e}")
-    except Exception as e:
-        print(f"[WARN] Failed to process Chrome windows: {e}")
-
-    # Now activate the correct window with multiple attempts
     activation_success = False
     for attempt in range(3):  # Try up to 3 times
         if activate_user_window(user_id):
@@ -179,19 +165,6 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
     if sys.platform == 'win32':
         disable_focus_stealing_prevention()
 
-    # First, try to minimize all Chrome windows to handle fullscreen issues
-    try:
-        chrome_windows = gw.getWindowsWithTitle("Chrome")
-        for window in chrome_windows:
-            try:
-                if window.isMaximized:
-                    window.minimize()
-                    time.sleep(0.2)
-            except Exception as e:
-                print(f"[WARN] Failed to minimize Chrome window: {e}")
-    except Exception as e:
-        print(f"[WARN] Failed to process Chrome windows: {e}")
-
     # Now activate the correct window with multiple attempts
     activation_success = False
     for attempt in range(3):  # Try up to 3 times
@@ -307,4 +280,4 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
     except Exception as e:
         print(f"[ERROR] Action failed: {e}")
         traceback.print_exc()
-        return {"error": f"Action failed: {str(e)}"}
+    return {"error": f"Action failed: {str(e)}"}
