@@ -1,16 +1,21 @@
 # TesterAlly - AI-Based Automation Testing Tool
 
 ## 1. Introduction
-TesterAlly is an AI-powered automation testing tool designed for UI interactions, screenshot capture, and automated test execution. It leverages **Django**, **PyAutoGUI**, and **VNC Server** to enable remote web application testing across multiple OS environments. The application is deployed on **AWS EC2 (t3.medium)** and secured with **Cloudflare** for domain management (**testerally.ai**).
+TesterAlly is an AI-powered automation testing tool designed to simplify test execution for desktop and web applications. With this new Windows installer approach, users can run the automation agent directly on their local machines, eliminating the need for cloud setup or manual deployment.
 
+Users simply log in to https://testerally.ai, select their subscription plan, and download the Windows Installer (.exe). The installed agent connects securely to the cloud backend and executes tests as per project configurations.
 ---
 ## 2. Project Architecture
 ```
-TesterAlly/
-│-- TesterAlly-BE/             # Django Backend Repository
+TestAuth-BE/
+│-- TestAuth-BE/             # Django Backend Repository
 │   │-- api/                   # API Application
 │   │-- automation/            # Automation Application
-│-- TesterAlly-FE/             # React Frontend Repository
+|   |-- static/                # Django static file for FE build folder
+|   |   |-- build/             # FE Build folder for single files
+|   |-- staticfiles/           # Colleted static files after the command 
+|   |   |-- build/             # Run the extensions with FE after Collect Static
+│-- TestAuth-FE/             # React Frontend Repository
 ```
 ---
 ## 3. Technology Stack
@@ -18,8 +23,8 @@ TesterAlly/
 - **Backend**: Django (REST API) with Gunicorn & Nginx
 - **Frontend**: React
 - **Automation**: PyAutoGUI, Replicate - OmniParser v2 Model
-- **Remote Control**: VNC Server
-- **Database**: AWS RDS (PostgreSQL)
+- **Remote Control**: Local windows - (PyGetWindows)
+- **Database**: AWS RDS (Mysql)
 - **Cloud Infrastructure**: AWS EC2 (t3.medium) with an Elastic IP (**13.48.64.40**)
 - **Domain & Security**: Cloudflare (**testerally.ai**)
 
@@ -27,17 +32,36 @@ TesterAlly/
 ## 4. Installation Guide
 ### Step 1: Clone the Repositories
 ```sh
-git clone https://github.com/rangad123/TesterAlly-FE.git
-cd TesterAlly-FE
+git clone https://github.com/rangad123/TestAuth-BE.git
+cd TestAuth-BE
 
-git clone https://github.com/rangad123/TesterAlly-BE.git
-cd TesterAlly-BE
+git clone https://github.com/rangad123/TestAuth-FE.git
+cd TestAuth-FE
+```
+
+### Step 3: Set Up the Frontend (React)
+```sh
+# Move to Frontend Directory
+cd ../TestAuth-FE
+
+# Install Dependencies
+npm install
+
+# Start React Development Server
+npm start
+
+# Build the Frontend for single exe file\
+npm run build
+
+# Move the Build Folder to TestAuth-BE static folder
+mv build TestAuth-BE/static/
+
 ```
 
 ### Step 2: Set Up the Backend (Django)
 ```sh
 # Move to Backend Directory
-cd TesterAlly-BE
+cd TestAuth-BE
 
 # Create a Virtual Environment
 python3 -m venv venv
@@ -49,20 +73,11 @@ pip install -r requirements.txt
 
 # Apply Migrations
 python manage.py migrate
+
+# Collect the static file with TestAuth-FE Build folder
+python manage.py collectstatic
+
 ```
-
-### Step 3: Set Up the Frontend (React)
-```sh
-# Move to Frontend Directory
-cd ../TesterAlly-FE
-
-# Install Dependencies
-npm install
-
-# Start React Development Server
-npm start
-```
-
 ---
 ## 5. Configuring Gunicorn & Nginx on EC2
 ### Step 1: Connect to EC2 and Install Dependencies
