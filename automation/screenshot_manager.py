@@ -37,6 +37,8 @@ def take_screenshot(user_id, context=""):
         screenshot = pyautogui.screenshot()
         screenshot.save(screenshot_path)
 
+        time.sleep(2)
+        
         if not os.path.exists(screenshot_path):
             raise FileNotFoundError("Screenshot not saved!")
 

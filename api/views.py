@@ -734,12 +734,15 @@ class ProtectedView(APIView):
 
 
 class TrackDownloadView(APIView):
-    permission_classes = []  # Allow all
+    permission_classes = []
 
     def post(self, request):
         user_id = request.data.get('user_id')
-        if not user_id:
-            return Response({'error': 'user_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        os_name = request.data.get('os_name')
+        os_version = request.data.get('os_version')
+
+        if not user_id or not os_name or not os_version:
+            return Response({'error': 'user_id, os_name, and os_version are required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             user = User.objects.get(id=user_id)
@@ -747,26 +750,26 @@ class TrackDownloadView(APIView):
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
         ip = request.META.get('REMOTE_ADDR')
-        user_agent = request.META.get('HTTP_USER_AGENT')
 
-        existing = EXEDownload.objects.filter(user=user).last()
+        # Check if a record exists for same user + os_name + os_version
+        existing = EXEDownload.objects.filter(user=user, os_name=os_name, os_version=os_version).first()
+
         if existing:
             existing.download_count += 1
             existing.ip_address = ip
-            existing.user_agent = user_agent
             existing.save()
             serializer = EXEDownloadSerializer(existing)
         else:
             new_download = EXEDownload.objects.create(
                 user=user,
+                os_name=os_name,
+                os_version=os_version,
                 ip_address=ip,
-                user_agent=user_agent
             )
             serializer = EXEDownloadSerializer(new_download)
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    
     def get(self, request):
         user_id = request.query_params.get('user_id')
         if not user_id:
@@ -777,13 +780,12 @@ class TrackDownloadView(APIView):
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        try:
-            download = EXEDownload.objects.get(user=user)
-            serializer = EXEDownloadSerializer(download)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except EXEDownload.DoesNotExist:
+        downloads = EXEDownload.objects.filter(user=user)
+        if not downloads.exists():
             return Response({'message': 'No download record found for this user'}, status=status.HTTP_404_NOT_FOUND)
 
+        serializer = EXEDownloadSerializer(downloads, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 
