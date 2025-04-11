@@ -1,0 +1,39 @@
+# Ignore Python files
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.sqlite3
+Procfile
+runtime.txt
+
+# Environment settings
+.env
+
+# Ignore virtual environments
+venv/
+env/
+
+# Django-specific files
+*.log
+*.pot
+*.py[co]
+.DS_Store
+db.sqlite3
+migrations/  # Fixed
+
+# Ignore IDE/editor files
+.vscode/
+.idea/
+*.swp
+
+# Ignore executable files correctly
+*.exe  # Fixed
+
+# Ignore build and distribution files
+dist/
+build/
+TesterAlly.exe
+manage.spec
+run.py
+run.spec
