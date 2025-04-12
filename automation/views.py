@@ -1181,47 +1181,64 @@ def Execute_command(request):
 
 
 
-import platform
-import psutil
-import socket
-import uuid
-import json
-from django.http import JsonResponse
-from screeninfo import get_monitors
+# views.py
 
-def get_system_info(user_id):
-    """Get full system details and return as JSON"""
+from django.http import JsonResponse
+from django.contrib.auth.models import User
+from .models import SystemInfo
+from .serializers import SystemInfoSerializer
+from screeninfo import get_monitors
+import platform, psutil, socket, uuid
+
+def get_system_info(user):
     try:
-        screen = get_monitors()[0]  # Get primary monitor resolution
+        screen = get_monitors()[0]
         screen_resolution = f"{screen.width}x{screen.height}"
     except Exception as e:
-        print(f"⚠️ Error getting screen resolution: {str(e)}")
         screen_resolution = "Unknown"
 
-    system_info = {
-        "user_id": user_id,
+    return {
+        "user": user.id,
         "os_name": platform.system(),
         "os_version": platform.version(),
         "architecture": platform.machine(),
         "cpu": platform.processor(),
-        "ram": psutil.virtual_memory().total // (1024 ** 3),  # in GB
+        "ram": psutil.virtual_memory().total // (1024 ** 3),
         "screen_resolution": screen_resolution,
         "ip_address": socket.gethostbyname(socket.gethostname()),
         "mac_address": ":".join(
-            ["{:02x}".format((uuid.getnode() >> elements) & 0xff) for elements in range(0, 2 * 6, 8)][::-1]
+            ["{:02x}".format((uuid.getnode() >> bits) & 0xff) for bits in range(0, 2 * 6, 8)][::-1]
         ),
     }
 
-    return system_info
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
 
+@api_view(["GET"])
 def user_login_success(request):
-    """API to fetch system details after user login"""
     user_id = request.GET.get("user_id")
 
     if not user_id:
-        return JsonResponse({"error": "user_id is required"}, status=400)
+        return Response({"error": "user_id is required"}, status=400)
 
-    system_info = get_system_info(user_id)
+    try:
+        user = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
 
-    print("🚀 Sending JSON Response:", system_info)
-    return JsonResponse(system_info)
+    system_data = get_system_info(user)
+
+    # Check if this system info already exists
+    if SystemInfo.objects.filter(
+        user=user,
+        os_name=system_data["os_name"],
+        os_version=system_data["os_version"]
+    ).exists():
+        return Response({"message": "System info already exists. Not saving again."})
+
+    serializer = SystemInfoSerializer(data=system_data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response({"message": "System info saved successfully.", "data": serializer.data})
+    else:
+        return Response(serializer.errors, status=400)
