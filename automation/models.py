@@ -1,6 +1,6 @@
 
 from django.db import models
-from django.contrib.auth.models import User
+from api.models import User
 
 class SystemInfo(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)

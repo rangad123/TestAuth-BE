@@ -75,8 +75,8 @@ if sys.platform == 'win32':
 #     SPI_SETFOREGROUNDLOCKTIMEOUT = 0x2001
 
 
-def react_app(request, path=''):
-    return render(request, 'index.html')
+# def react_app(request, path=''):
+#     return render(request, 'index.html')
 
 
 # def cleanup_inactive_sessions():
@@ -1193,6 +1193,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 
+# Function to collect system info
 def get_system_info(user):
     try:
         screen = get_monitors()[0]
@@ -1201,7 +1202,7 @@ def get_system_info(user):
         screen_resolution = "Unknown"
 
     return {
-        "user": user,
+        "user": user.id,  # ✅ Pass user ID instead of User instance
         "os_name": platform.system(),
         "os_version": platform.version(),
         "architecture": platform.machine(),
@@ -1213,7 +1214,6 @@ def get_system_info(user):
             ["{:02x}".format((uuid.getnode() >> bits) & 0xff) for bits in range(0, 2 * 6, 8)][::-1]
         ),
     }
-
 
 
 @api_view(["GET"])
@@ -1233,15 +1233,17 @@ def user_login_success(request):
     system_data = get_system_info(user)
     print(f"system_data info: {system_data}")
 
-    system_data["user"] = user
+    # Don't overwrite system_data["user"], already contains user ID
 
+    # Check if record already exists
     if SystemInfo.objects.filter(
-            user=user,
-            os_name=system_data["os_name"],
-            os_version=system_data["os_version"]
+        user=user,
+        os_name=system_data["os_name"],
+        os_version=system_data["os_version"]
     ).exists():
         return Response({"message": "System info already exists. Not saving again."})
 
+    # Save new system info
     serializer = SystemInfoSerializer(data=system_data)
     if serializer.is_valid():
         serializer.save()
