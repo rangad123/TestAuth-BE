@@ -1183,7 +1183,7 @@ def Execute_command(request):
 
 # For .exe installation tracking code
 
-from django.http import JsonResponse
+from django.http import JsonResponse 
 from api.models import User
 from .models import SystemInfo
 from .serializers import SystemInfoSerializer
@@ -1233,20 +1233,27 @@ def user_login_success(request):
     system_data = get_system_info(user)
     print(f"system_data info: {system_data}")
 
-    # Don't overwrite system_data["user"], already contains user ID
-
     # Check if record already exists
-    if SystemInfo.objects.filter(
+    existing_info = SystemInfo.objects.filter(
         user=user,
         os_name=system_data["os_name"],
         os_version=system_data["os_version"]
-    ).exists():
-        return Response({"message": "System info already exists. Not saving again."})
+    ).order_by('-created_at').first()
+
+    if existing_info:
+        serializer = SystemInfoSerializer(existing_info)
+        return Response({
+            "message": "System info already exists.",
+            "data": serializer.data
+        })
 
     # Save new system info
     serializer = SystemInfoSerializer(data=system_data)
     if serializer.is_valid():
         serializer.save()
-        return Response({"message": "System info saved successfully", "data": serializer.data})
+        return Response({
+            "message": "System info saved successfully",
+            "data": serializer.data
+        })
     else:
         return Response(serializer.errors, status=400)
