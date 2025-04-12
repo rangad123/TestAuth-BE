@@ -1180,3 +1180,48 @@ def Execute_command(request):
 
 
 
+
+import platform
+import psutil
+import socket
+import uuid
+import json
+from django.http import JsonResponse
+from screeninfo import get_monitors
+
+def get_system_info(user_id):
+    """Get full system details and return as JSON"""
+    try:
+        screen = get_monitors()[0]  # Get primary monitor resolution
+        screen_resolution = f"{screen.width}x{screen.height}"
+    except Exception as e:
+        print(f"⚠️ Error getting screen resolution: {str(e)}")
+        screen_resolution = "Unknown"
+
+    system_info = {
+        "user_id": user_id,
+        "os_name": platform.system(),
+        "os_version": platform.version(),
+        "architecture": platform.machine(),
+        "cpu": platform.processor(),
+        "ram": psutil.virtual_memory().total // (1024 ** 3),  # in GB
+        "screen_resolution": screen_resolution,
+        "ip_address": socket.gethostbyname(socket.gethostname()),
+        "mac_address": ":".join(
+            ["{:02x}".format((uuid.getnode() >> elements) & 0xff) for elements in range(0, 2 * 6, 8)][::-1]
+        ),
+    }
+
+    return system_info
+
+def user_login_success(request):
+    """API to fetch system details after user login"""
+    user_id = request.GET.get("user_id")
+
+    if not user_id:
+        return JsonResponse({"error": "user_id is required"}, status=400)
+
+    system_info = get_system_info(user_id)
+
+    print("🚀 Sending JSON Response:", system_info)
+    return JsonResponse(system_info)
