@@ -28,7 +28,8 @@ migrations/  # Fixed
 *.swp
 
 # Ignore executable files correctly
-*.exe  # Fixed
+*.exe
+*.pkg
 
 # Ignore build and distribution files
 dist/
