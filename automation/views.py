@@ -1181,7 +1181,7 @@ def Execute_command(request):
 
 
 
-# views.py
+# For .exe installation tracking code
 
 from django.http import JsonResponse
 from django.contrib.auth.models import User
