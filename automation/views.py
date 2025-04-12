@@ -75,8 +75,8 @@ if sys.platform == 'win32':
 #     SPI_SETFOREGROUNDLOCKTIMEOUT = 0x2001
 
 
-# def react_app(request, path=''):
-#     return render(request, 'index.html')
+def react_app(request, path=''):
+    return render(request, 'index.html')
 
 
 # def cleanup_inactive_sessions():
