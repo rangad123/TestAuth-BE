@@ -1184,11 +1184,14 @@ def Execute_command(request):
 # For .exe installation tracking code
 
 from django.http import JsonResponse
-from django.contrib.auth.models import User
+from api.models import User
 from .models import SystemInfo
 from .serializers import SystemInfoSerializer
 from screeninfo import get_monitors
 import platform, psutil, socket, uuid
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
 
 def get_system_info(user):
     try:
@@ -1198,7 +1201,7 @@ def get_system_info(user):
         screen_resolution = "Unknown"
 
     return {
-        "user": user.id,
+        "user": user,
         "os_name": platform.system(),
         "os_version": platform.version(),
         "architecture": platform.machine(),
@@ -1211,8 +1214,7 @@ def get_system_info(user):
         ),
     }
 
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
+
 
 @api_view(["GET"])
 def user_login_success(request):
@@ -1221,24 +1223,28 @@ def user_login_success(request):
     if not user_id:
         return Response({"error": "user_id is required"}, status=400)
 
+    print("Incoming user_id:", user_id)
+
     try:
         user = User.objects.get(pk=user_id)
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=404)
 
     system_data = get_system_info(user)
+    print(f"system_data info: {system_data}")
 
-    # Check if this system info already exists
+    system_data["user"] = user
+
     if SystemInfo.objects.filter(
-        user=user,
-        os_name=system_data["os_name"],
-        os_version=system_data["os_version"]
+            user=user,
+            os_name=system_data["os_name"],
+            os_version=system_data["os_version"]
     ).exists():
         return Response({"message": "System info already exists. Not saving again."})
 
     serializer = SystemInfoSerializer(data=system_data)
     if serializer.is_valid():
         serializer.save()
-        return Response({"message": "System info saved successfully.", "data": serializer.data})
+        return Response({"message": "System info saved successfully", "data": serializer.data})
     else:
         return Response(serializer.errors, status=400)
