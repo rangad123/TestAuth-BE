@@ -165,7 +165,7 @@ class EXEDownload(models.Model):
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     download_count = models.PositiveIntegerField(default=1)
     last_downloaded = models.DateTimeField(auto_now=True)
-    download_uid = models.CharField(max_length=100, unique=True)
+    download_uid = models.CharField(max_length=100, unique=True, null=True)
 
     def __str__(self):
         return f"{self.user.username} - {self.os_name} ({self.download_uid})"
