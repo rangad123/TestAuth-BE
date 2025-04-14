@@ -1183,8 +1183,8 @@ def Execute_command(request):
 
 # For .exe installation tracking code
 
-from django.http import JsonResponse 
-from api.models import User
+from django.http import JsonResponse  
+from api.models import User, EXEDownload
 from .models import SystemInfo
 from .serializers import SystemInfoSerializer
 from screeninfo import get_monitors
@@ -1202,7 +1202,7 @@ def get_system_info(user):
         screen_resolution = "Unknown"
 
     return {
-        "user": user.id,  # ✅ Pass user ID instead of User instance
+        "user": user.id,  # Will still pass user explicitly in .save()
         "os_name": platform.system(),
         "os_version": platform.version(),
         "architecture": platform.machine(),
@@ -1252,10 +1252,11 @@ def user_login_success(request):
     # Save new system info
     serializer = SystemInfoSerializer(data=system_data)
     if serializer.is_valid():
-        serializer.save()
+        serializer.save(user=user, exe_download=exe_download)  # ✅ Fixed line
         return Response({
             "message": "System info saved successfully",
             "data": serializer.data
         })
     else:
         return Response(serializer.errors, status=400)
+
