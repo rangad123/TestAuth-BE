@@ -1219,18 +1219,25 @@ def get_system_info(user):
 @api_view(["GET"])
 def user_login_success(request):
     user_id = request.GET.get("user_id")
-    download_uid = request.data.get("download_uid")
+    # download_uid = request.data.get("download_uid")
 
-    if not user_id or not download_uid:
-        return Response({"error": "user_id and download_uid required"}, status=400)
+    if not user_id:
+        return Response({"error": "user_id required"}, status=400)
 
-    print("Incoming user_id:", user_id, "download_uid:", download_uid)
+    print("Incoming user_id:", user_id)
+
+    # if not user_id or not download_uid:
+    #     return Response({"error": "user_id and download_uid required"}, status=400)
+
+    # print("Incoming user_id:", user_id, "download_uid:", download_uid)
 
     try:
         user = User.objects.get(pk=user_id)
-        exe_download = EXEDownload.objects.get(download_uid=download_uid)
-    except (User.DoesNotExist, EXEDownload.DoesNotExist):
-        return Response({"error": "Invalid user or download UID"}, status=404)
+        # exe_download = EXEDownload.objects.get(download_uid=download_uid)
+    except User.DoesNotExist:
+        return Response({"error": "Invalid User Id"})
+    # except (User.DoesNotExist, EXEDownload.DoesNotExist):
+    #     return Response({"error": "Invalid user or download UID"}, status=404)
 
     system_data = get_system_info(user)
     print(f"system_data info: {system_data}")
@@ -1252,7 +1259,8 @@ def user_login_success(request):
     # Save new system info
     serializer = SystemInfoSerializer(data=system_data)
     if serializer.is_valid():
-        serializer.save(user=user, exe_download=exe_download)  # ✅ Fixed line
+        # serializer.save(user=user, exe_download=exe_download)  # ✅ Fixed line
+        serializer.save()
         return Response({
             "message": "System info saved successfully",
             "data": serializer.data
