@@ -1,9 +1,10 @@
 
 from django.db import models
-from api.models import User
+from api.models import User, EXEDownload
 
 class SystemInfo(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    exe_download = models.ForeignKey(EXEDownload, on_delete=models.SET_NULL, null=True, blank=True)
     os_name = models.CharField(max_length=100)
     os_version = models.CharField(max_length=200)
     architecture = models.CharField(max_length=100)

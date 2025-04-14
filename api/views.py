@@ -755,20 +755,27 @@ class TrackDownloadView(APIView):
         existing = EXEDownload.objects.filter(user=user, os_name=os_name, os_version=os_version).first()
 
         if existing:
+            if existing.download_count >= 3:
+                return Response({'message': 'Download limit reached (3). Please upgrade your plan to continue downloading.'}, status=status.HTTP_403_FORBIDDEN)
+            
             existing.download_count += 1
             existing.ip_address = ip
             existing.save()
             serializer = EXEDownloadSerializer(existing)
         else:
+            unique_download_uid = str(uuid.uuid4())
             new_download = EXEDownload.objects.create(
                 user=user,
                 os_name=os_name,
                 os_version=os_version,
                 ip_address=ip,
+                download_count=1,  # Make sure this field defaults to 1 if not auto-set
+                download_uid=unique_download_uid
             )
             serializer = EXEDownloadSerializer(new_download)
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
 
     def get(self, request):
         user_id = request.query_params.get('user_id')
