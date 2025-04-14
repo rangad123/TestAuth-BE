@@ -749,33 +749,20 @@ class TrackDownloadView(APIView):
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        ip = request.META.get('REMOTE_ADDR')
+        ip = request.META.get('HTTP_X_FORWARDED_FOR') or request.META.get('REMOTE_ADDR')
+        unique_download_uid = str(uuid.uuid4())
 
-        # Check if a record exists for same user + os_name + os_version
-        existing = EXEDownload.objects.filter(user=user, os_name=os_name, os_version=os_version).first()
+        new_download = EXEDownload.objects.create(
+            user=user,
+            os_name=os_name,
+            os_version=os_version,
+            ip_address=ip,
+            download_uid=unique_download_uid,
+            download_count=1  # Optional: just to indicate this is the first for this record
+        )
 
-        if existing:
-            if existing.download_count >= 3:
-                return Response({'message': 'Download limit reached (3). Please upgrade your plan to continue downloading.'}, status=status.HTTP_403_FORBIDDEN)
-            
-            existing.download_count += 1
-            existing.ip_address = ip
-            existing.save()
-            serializer = EXEDownloadSerializer(existing)
-        else:
-            unique_download_uid = str(uuid.uuid4())
-            new_download = EXEDownload.objects.create(
-                user=user,
-                os_name=os_name,
-                os_version=os_version,
-                ip_address=ip,
-                download_count=1,  # Make sure this field defaults to 1 if not auto-set
-                download_uid=unique_download_uid
-            )
-            serializer = EXEDownloadSerializer(new_download)
-
+        serializer = EXEDownloadSerializer(new_download)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-
 
     def get(self, request):
         user_id = request.query_params.get('user_id')
