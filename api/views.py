@@ -756,7 +756,7 @@ class TrackDownloadView(APIView):
 
         if existing:
             if existing.download_count >= 3:
-                return Response({'message': 'Download limit reached (3).  Please upgrade your plan to continue downloading.'}, status=status.HTTP_403_FORBIDDEN)
+                return Response({'message': 'Download limit reached (3). Please upgrade your plan to continue downloading.'}, status=status.HTTP_403_FORBIDDEN)
             
             existing.download_count += 1
             existing.ip_address = ip
