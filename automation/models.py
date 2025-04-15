@@ -16,4 +16,7 @@ class SystemInfo(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('user', 'os_name', 'os_version')  # prevent duplicates
+        unique_together = (
+            'user', 'os_name', 'os_version', 'architecture', 'cpu',
+            'ram', 'screen_resolution', 'ip_address', 'mac_address'
+        )
