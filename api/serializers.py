@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import User, Project, TestCase, TestSuite,Requirement,Role,ProjectInvitation,ProjectMember
-from .models import TestCaseType, TestCasePriority, RequirementType, TestData,TestStep, EXEDownload
+from .models import TestCaseType, TestCasePriority, RequirementType, TestData,TestStep
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -80,8 +80,3 @@ class RequirementTypeSerializer(serializers.ModelSerializer):
         model = RequirementType
         fields = '__all__'
 
-
-class EXEDownloadSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EXEDownload
-        fields = '__all__'

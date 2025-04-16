@@ -1,14 +1,14 @@
 from django.urls import path, re_path
 from . import views
+from .views import *
 from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
-    path('handle_command/', views.handle_command, name='handle_command'),
-    path('Execute_command/', views.Execute_command, name='Execute_command'),
-    
+    path("EXE_login/", views.EXE_login, name="EXE_login"),
+    path('track-download/', TrackDownloadView.as_view(), name='track-download'),
 
-    #re_path(r'^react_app/.*$', views.react_app, name='react_app'),
+    
 
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

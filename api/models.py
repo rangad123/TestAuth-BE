@@ -158,14 +158,3 @@ class RequirementType(models.Model):
         return self.type_name
 
 
-class EXEDownload(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='exe_downloads')
-    os_name = models.TextField(null=True, blank=True)
-    os_version = models.TextField(null=True, blank=True)
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    download_count = models.PositiveIntegerField(default=1)
-    last_downloaded = models.DateTimeField(auto_now=True)
-    download_uid = models.CharField(max_length=100, unique=True, null=True)
-
-    def __str__(self):
-        return f"{self.user.username} - {self.os_name} ({self.download_uid})"

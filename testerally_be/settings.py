@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'api',
     'automation',
+    'exe_installer',
 ]
 
 # REST Framework settings
