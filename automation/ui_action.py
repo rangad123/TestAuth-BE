@@ -120,36 +120,54 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
             except:
                 print("[Warn] Scrolled Down failed")
 
+
         elif action == 'verify': 
             try:
                 pyautogui.doubleClick(click_X, click_Y)
                 time.sleep(0.5)
                 pyautogui.hotkey('ctrl', 'c')
                 time.sleep(0.5)
-                copied_text = pyperclip.paste()
+                copied_text = pyperclip.paste().strip()
 
-                # Function to normalize spaces and case
+                # Normalization functions
                 def normalize(text):
-                    return re.sub(r'\s+', ' ', text.strip().lower())  # Replaces multiple spaces with a single one
+                    return re.sub(r'\s+', ' ', text.strip().lower())
 
-                # Function to remove all spaces and lowercase
                 def remove_spaces(text):
-                    return re.sub(r'\s+', '', text.lower())  # Removes all spaces
+                    return re.sub(r'\s+', '', text.lower())
 
-                # Normalize both inputs
                 normalized_element = normalize(element_name)
                 normalized_copied = normalize(copied_text)
                 no_space_element = remove_spaces(element_name)
                 no_space_copied = remove_spaces(copied_text)
 
-                # Check both conditions
-                if normalized_copied == normalized_element or no_space_copied == no_space_element:
-                    print(f"[INFO] Verify Passed: '{element_name}' is present on the screen")
-                else:
-                    print(f"[INFO] Verify Failed: '{element_name}' not present on the screen. Copied text: '{copied_text}'")
+                passed = (normalized_copied == normalized_element or no_space_copied == no_space_element)
+
+                 # Wait longer for any UI updates
+                time.sleep(3)
+
+                # Update the window title in our tracking
+                print("[DEBUG] Updating window title after UI action")
+                update_window_title(user_id)
+                
+                # Take screenshot and get coordinates
+                screenshot_path, screenshot_url = take_screenshot(user_id, action)
+                omniparser_response = send_to_omniparser(screenshot_path)
+
+                return {
+                    "status": "success",
+                    "verify_result": "pass" if passed else "fail",
+                    "copied_text": copied_text,
+                    "screenshot": screenshot_url,
+                    "coordinates": omniparser_response
+                }
 
             except Exception as e:
-                print(f"[WARN] Verify command Failed: {e}")
+                return {
+                    "status": "error",
+                    "message": f"Verify command failed: {e}"
+                }
+
 
 
         elif action == 'get':
@@ -158,19 +176,31 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 time.sleep(0.5)
                 pyautogui.hotkey('ctrl', 'c')
                 time.sleep(0.5)
-                copied_text = pyperclip.paste()
-                copied_text = copied_text.strip()
+                copied_text = pyperclip.paste().strip()
+
+
+                # Wait longer for any UI updates
+                time.sleep(3)
+
+                # Update the window title in our tracking
+                print("[DEBUG] Updating window title after UI action")
+                update_window_title(user_id)
+
+                # Take screenshot and get coordinates
+                screenshot_path, screenshot_url = take_screenshot(user_id, action)
+                omniparser_response = send_to_omniparser(screenshot_path)
 
                 return {
                     "status": "success",
-                    "copied_text": copied_text
+                    "copied_text": copied_text,
+                    "screenshot": screenshot_url,
+                    "coordinates": omniparser_response
                 }
             except Exception as e:
                 return {
                     "status": "error",
                     "message": f"Get command failed: {e}"
                 }
-
 
         else:
             return {"error": "Invalid action"}
@@ -315,30 +345,46 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 time.sleep(0.5)
                 pyautogui.hotkey('ctrl', 'c')
                 time.sleep(0.5)
-                copied_text = pyperclip.paste()
+                copied_text = pyperclip.paste().strip()
 
-                # Function to normalize spaces and case
+                # Normalization functions
                 def normalize(text):
-                    return re.sub(r'\s+', ' ', text.strip().lower())  # Replaces multiple spaces with a single one
+                    return re.sub(r'\s+', ' ', text.strip().lower())
 
-                # Function to remove all spaces and lowercase
                 def remove_spaces(text):
-                    return re.sub(r'\s+', '', text.lower())  # Removes all spaces
+                    return re.sub(r'\s+', '', text.lower())
 
-                # Normalize both inputs
                 normalized_element = normalize(element_name)
                 normalized_copied = normalize(copied_text)
                 no_space_element = remove_spaces(element_name)
                 no_space_copied = remove_spaces(copied_text)
 
-                # Check both conditions
-                if normalized_copied == normalized_element or no_space_copied == no_space_element:
-                    print(f"[INFO] Verify Passed: '{element_name}' is present on the screen")
-                else:
-                    print(f"[INFO] Verify Failed: '{element_name}' not present on the screen. Copied text: '{copied_text}'")
+                passed = (normalized_copied == normalized_element or no_space_copied == no_space_element)
+
+                 # Wait longer for any UI updates
+                time.sleep(3)
+
+                # Update the window title in our tracking
+                print("[DEBUG] Updating window title after UI action")
+                update_window_title(user_id)
+                
+                # Take screenshot and get coordinates
+                screenshot_path, screenshot_url = take_screenshot(user_id, action)
+
+                return {
+                    "status": "success",
+                    "verify_result": "pass" if passed else "fail",
+                    "copied_text": copied_text,
+                    "screenshot": screenshot_url,
+                    "coordinates": omniparser_response
+                }
 
             except Exception as e:
-                print(f"[WARN] Verify command Failed: {e}")
+                return {
+                    "status": "error",
+                    "message": f"Verify command failed: {e}"
+                }
+
 
 
         elif action == 'get':
@@ -347,12 +393,24 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 time.sleep(0.5)
                 pyautogui.hotkey('ctrl', 'c')
                 time.sleep(0.5)
-                copied_text = pyperclip.paste()
-                copied_text = copied_text.strip()
+                copied_text = pyperclip.paste().strip()
+
+
+                # Wait longer for any UI updates
+                time.sleep(3)
+
+                # Update the window title in our tracking
+                print("[DEBUG] Updating window title after UI action")
+                update_window_title(user_id)
+                
+                # Take screenshot and get coordinates
+                screenshot_path, screenshot_url = take_screenshot(user_id, action)
 
                 return {
                     "status": "success",
-                    "copied_text": copied_text
+                    "copied_text": copied_text,
+                    "screenshot": screenshot_url,
+                    "coordinates": omniparser_response
                 }
             except Exception as e:
                 return {
