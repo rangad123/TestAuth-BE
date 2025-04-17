@@ -123,7 +123,11 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
 
         elif action == 'verify': 
             try:
-                pyautogui.doubleClick(click_X, click_Y)
+
+                word_count = len(element_name.split())
+                click_type = 3 if word_count > 1 else 2
+
+                pyautogui.click(click_X, click_Y, clicks=click_type)
                 time.sleep(0.5)
                 pyautogui.hotkey('ctrl', 'c')
                 time.sleep(0.5)
@@ -172,7 +176,11 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
 
         elif action == 'get':
             try:
-                pyautogui.doubleClick(click_X, click_Y)
+
+                word_count = len(element_name.split())
+                click_type = 3 if word_count > 1 else 2
+
+                pyautogui.Click(click_X, click_Y, clicks=click_type)
                 time.sleep(0.5)
                 pyautogui.hotkey('ctrl', 'c')
                 time.sleep(0.5)
@@ -341,7 +349,11 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
 
         elif action == 'verify': 
             try:
-                pyautogui.doubleClick(click_X, click_Y)
+
+                word_count = len(element_name.split())
+                click_type = 3 if word_count > 1 else 2
+
+                pyautogui.click(click_X, click_Y, clicks=click_type)
                 time.sleep(0.5)
                 pyautogui.hotkey('ctrl', 'c')
                 time.sleep(0.5)
@@ -389,7 +401,11 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
 
         elif action == 'get':
             try:
-                pyautogui.doubleClick(click_X, click_Y)
+
+                word_count = len(element_name.split())
+                click_type = 3 if word_count > 1 else 2
+
+                pyautogui.Click(click_X, click_Y, clicks=click_type)
                 time.sleep(0.5)
                 pyautogui.hotkey('ctrl', 'c')
                 time.sleep(0.5)
@@ -402,7 +418,7 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 # Update the window title in our tracking
                 print("[DEBUG] Updating window title after UI action")
                 update_window_title(user_id)
-                
+
                 # Take screenshot and get coordinates
                 screenshot_path, screenshot_url = take_screenshot(user_id, action)
 
@@ -417,6 +433,7 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
                     "status": "error",
                     "message": f"Get command failed: {e}"
                 }
+
 
         else:
             return {"error": "Invalid action"}
