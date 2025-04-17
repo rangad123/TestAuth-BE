@@ -1,7 +1,9 @@
 import pyautogui
+import pyperclip
 import json
 import requests
 import os
+import re
 import time
 import sys
 import pygetwindow as gw
@@ -117,6 +119,57 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 print("[INFO] Scrolled Down success")
             except:
                 print("[Warn] Scrolled Down failed")
+
+        elif action == 'verify': 
+            try:
+                pyautogui.doubleClick(click_X, click_Y)
+                time.sleep(0.5)
+                pyautogui.hotkey('ctrl', 'c')
+                time.sleep(0.5)
+                copied_text = pyperclip.paste()
+
+                # Function to normalize spaces and case
+                def normalize(text):
+                    return re.sub(r'\s+', ' ', text.strip().lower())  # Replaces multiple spaces with a single one
+
+                # Function to remove all spaces and lowercase
+                def remove_spaces(text):
+                    return re.sub(r'\s+', '', text.lower())  # Removes all spaces
+
+                # Normalize both inputs
+                normalized_element = normalize(element_name)
+                normalized_copied = normalize(copied_text)
+                no_space_element = remove_spaces(element_name)
+                no_space_copied = remove_spaces(copied_text)
+
+                # Check both conditions
+                if normalized_copied == normalized_element or no_space_copied == no_space_element:
+                    print(f"[INFO] Verify Passed: '{element_name}' is present on the screen")
+                else:
+                    print(f"[INFO] Verify Failed: '{element_name}' not present on the screen. Copied text: '{copied_text}'")
+
+            except Exception as e:
+                print(f"[WARN] Verify command Failed: {e}")
+
+
+        elif action == 'get':
+            try:
+                pyautogui.doubleClick(click_X, click_Y)
+                time.sleep(0.5)
+                pyautogui.hotkey('ctrl', 'c')
+                time.sleep(0.5)
+                copied_text = pyperclip.paste()
+                copied_text = copied_text.strip()
+
+                return {
+                    "status": "success",
+                    "copied_text": copied_text
+                }
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "message": f"Get command failed: {e}"
+                }
 
 
         else:
@@ -255,6 +308,57 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
             except:
                 print("[Warn] Scrolled Down failed")
 
+
+        elif action == 'verify': 
+            try:
+                pyautogui.doubleClick(click_X, click_Y)
+                time.sleep(0.5)
+                pyautogui.hotkey('ctrl', 'c')
+                time.sleep(0.5)
+                copied_text = pyperclip.paste()
+
+                # Function to normalize spaces and case
+                def normalize(text):
+                    return re.sub(r'\s+', ' ', text.strip().lower())  # Replaces multiple spaces with a single one
+
+                # Function to remove all spaces and lowercase
+                def remove_spaces(text):
+                    return re.sub(r'\s+', '', text.lower())  # Removes all spaces
+
+                # Normalize both inputs
+                normalized_element = normalize(element_name)
+                normalized_copied = normalize(copied_text)
+                no_space_element = remove_spaces(element_name)
+                no_space_copied = remove_spaces(copied_text)
+
+                # Check both conditions
+                if normalized_copied == normalized_element or no_space_copied == no_space_element:
+                    print(f"[INFO] Verify Passed: '{element_name}' is present on the screen")
+                else:
+                    print(f"[INFO] Verify Failed: '{element_name}' not present on the screen. Copied text: '{copied_text}'")
+
+            except Exception as e:
+                print(f"[WARN] Verify command Failed: {e}")
+
+
+        elif action == 'get':
+            try:
+                pyautogui.doubleClick(click_X, click_Y)
+                time.sleep(0.5)
+                pyautogui.hotkey('ctrl', 'c')
+                time.sleep(0.5)
+                copied_text = pyperclip.paste()
+                copied_text = copied_text.strip()
+
+                return {
+                    "status": "success",
+                    "copied_text": copied_text
+                }
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "message": f"Get command failed: {e}"
+                }
 
         else:
             return {"error": "Invalid action"}

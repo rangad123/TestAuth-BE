@@ -1040,6 +1040,33 @@ def handle_command(request):
 
             action_response = perform_ui_action(user_id, action, element_name, click_X, click_Y, type_text)
             return JsonResponse(action_response, safe=False)
+        
+        # Handling "verify" command
+        elif command.startswith("verify "):
+            parts = command.split(" ", 1)
+            if len(parts) < 2:
+                return JsonResponse({"error": "Invalid verify command format"}, status=400)
+
+            action, element_name = parts[0], parts[1]
+            if not element_name:
+                return JsonResponse({"error": "No element specified for verify"}, status=400)
+
+            action_response = perform_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            return JsonResponse(action_response)
+
+        elif command.startswith("get "):
+            parts = command.split(" ", 1)
+            if len(parts) < 2:
+                return JsonResponse({"error": "Invalid get command format"}, status=400)
+
+            action = parts[0]
+            element_name = parts[1]  # You can still receive a label for UI location
+
+            if not element_name.strip():
+                return JsonResponse({"error": "No element specified for get"}, status=400)
+
+            action_response = perform_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            return JsonResponse(action_response)
 
         return JsonResponse({"error": "Unknown command"}, status=400)
 
@@ -1165,6 +1192,35 @@ def Execute_command(request):
 
             action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, type_text)
             return JsonResponse(action_response, safe=False)
+
+        # Handling "verify" command
+        elif command.startswith("verify "):
+            parts = command.split(" ", 1)
+            if len(parts) < 2:
+                return JsonResponse({"error": "Invalid verify command format"}, status=400)
+
+            action, element_name = parts[0], parts[1]
+            if not element_name:
+                return JsonResponse({"error": "No element specified for verify"}, status=400)
+
+            action_response = perform_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            return JsonResponse(action_response)
+
+
+        # Handling "get" command
+        elif command.startswith("get "):
+            parts = command.split(" ", 1)
+            if len(parts) < 2:
+                return JsonResponse({"error": "Invalid get command format"}, status=400)
+
+            action = parts[0]
+            element_name = parts[1]  # You can still receive a label for UI location
+
+            if not element_name.strip():
+                return JsonResponse({"error": "No element specified for get"}, status=400)
+
+            action_response = perform_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            return JsonResponse(action_response)
 
         return JsonResponse({"error": "Unknown command"}, status=400)
 
