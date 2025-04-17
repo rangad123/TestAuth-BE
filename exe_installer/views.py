@@ -6,7 +6,7 @@ from django.shortcuts import render
 from django.http import JsonResponse  
 from api.models import User
 from .models import SystemInfo, EXEDownload
-from .serializers import SystemInfoSerializer
+from .serializers import SystemInfoSerializer, EXEDownloadSerializer
 from screeninfo import get_monitors
 from django.db import IntegrityError
 from rest_framework import status 

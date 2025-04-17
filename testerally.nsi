@@ -2,7 +2,7 @@
 !define APPNAME "TesterAlly-Installer"
 !define INSTALLDIR "$PROGRAMFILES\${APPNAME}"
 
-OutFile "TesterAlly.exe"
+OutFile "TesterAlly_01_001.exe"
 InstallDir ${INSTALLDIR}
 
 Section "Install"
@@ -12,9 +12,10 @@ Section "Install"
     File "D:\Demo\TestAuth-BE\dist\run.exe"
     File "D:\Demo\TestAuth-BE\dist\manage.exe"
     File "D:\Demo\TestAuth-BE\.env"
+    File "D:\Demo\TestAuth-BE\logo2.ico"
 
     ; Create shortcut on Desktop
-    CreateShortcut "$DESKTOP\TesterAllyApp.lnk" "$INSTDIR\run.exe"
+    CreateShortcut "$DESKTOP\TesterAllyApp.lnk" "$INSTDIR\run.exe" "" "$INSTDIR\logo2.ico"
 
     ; Run the launcher after installation
     ExecShell "" "$INSTDIR\run.exe"
