@@ -362,7 +362,6 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 print(f"[warn] verify command failed")
 
 
-
         elif action == 'get':
             try:
 
