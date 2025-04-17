@@ -147,31 +147,12 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
 
                 passed = (normalized_copied == normalized_element or no_space_copied == no_space_element)
 
-                 # Wait longer for any UI updates
-                time.sleep(3)
-
-                # Update the window title in our tracking
-                print("[DEBUG] Updating window title after UI action")
-                update_window_title(user_id)
-                
-                # Take screenshot and get coordinates
-                screenshot_path, screenshot_url = take_screenshot(user_id, action)
-                omniparser_response = send_to_omniparser(screenshot_path)
-
-                return {
-                    "status": "success",
-                    "verify_result": "pass" if passed else "fail",
-                    "copied_text": copied_text,
-                    "screenshot": screenshot_url,
-                    "coordinates": omniparser_response
-                }
-
-            except Exception as e:
-                return {
-                    "status": "error",
-                    "message": f"Verify command failed: {e}"
-                }
-
+                if passed:
+                    print(f"[success] Verified Successfully for: {element_name}, copied text is : {copied_text}")
+                else:
+                    print(f"[Warn] {element_name} Not found in the Screen")
+            except:
+                print(f"[warn] verify command failed")
 
 
         elif action == 'get':
@@ -373,29 +354,12 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
 
                 passed = (normalized_copied == normalized_element or no_space_copied == no_space_element)
 
-                 # Wait longer for any UI updates
-                time.sleep(3)
-
-                # Update the window title in our tracking
-                print("[DEBUG] Updating window title after UI action")
-                update_window_title(user_id)
-                
-                # Take screenshot and get coordinates
-                screenshot_path, screenshot_url = take_screenshot(user_id, action)
-
-                return {
-                    "status": "success",
-                    "verify_result": "pass" if passed else "fail",
-                    "copied_text": copied_text,
-                    "screenshot": screenshot_url,
-                    "coordinates": omniparser_response
-                }
-
-            except Exception as e:
-                return {
-                    "status": "error",
-                    "message": f"Verify command failed: {e}"
-                }
+                if passed:
+                    print(f"[success] Verified Successfully for: {element_name}, copied text is : {copied_text}")
+                else:
+                    print(f"[Warn] {element_name} Not found in the Screen")
+            except:
+                print(f"[warn] verify command failed")
 
 
 
