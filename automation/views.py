@@ -1068,6 +1068,25 @@ def handle_command(request):
             action_response = perform_ui_action(user_id, action, element_name, click_X, click_Y, "")
             return JsonResponse(action_response)
 
+        elif command.startswith("scroll_up "):
+            parts = command.split(" ", 1)
+            
+            action = parts[0]
+            element_name = parts[1]  # You can still receive a label for UI location
+
+            action_response = perform_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            return JsonResponse(action_response)
+
+        elif command.startswith("scroll_down "):
+            parts = command.split(" ", 1)
+            
+            action = parts[0]
+            element_name = parts[1]  # You can still receive a label for UI location
+
+            
+            action_response = perform_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            return JsonResponse(action_response)
+
         return JsonResponse({"error": "Unknown command"}, status=400)
 
     except json.JSONDecodeError:
@@ -1203,7 +1222,7 @@ def Execute_command(request):
             if not element_name:
                 return JsonResponse({"error": "No element specified for verify"}, status=400)
 
-            action_response = perform_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, "")
             return JsonResponse(action_response)
 
 
@@ -1219,7 +1238,31 @@ def Execute_command(request):
             if not element_name.strip():
                 return JsonResponse({"error": "No element specified for get"}, status=400)
 
-            action_response = perform_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            return JsonResponse(action_response)
+        
+        elif command.startswith("scroll_up "):
+            parts = command.split(" ", 1)
+            
+            action = parts[0]
+            element_name = parts[1]  # You can still receive a label for UI location
+
+            if not element_name.strip():
+                return JsonResponse({"error": "No element specified for get"}, status=400)
+
+            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            return JsonResponse(action_response)
+
+        elif command.startswith("scroll_down "):
+            parts = command.split(" ", 1)
+            
+            action = parts[0]
+            element_name = parts[1]  # You can still receive a label for UI location
+
+            if not element_name.strip():
+                return JsonResponse({"error": "No element specified for get"}, status=400)
+
+            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, "")
             return JsonResponse(action_response)
 
         return JsonResponse({"error": "Unknown command"}, status=400)

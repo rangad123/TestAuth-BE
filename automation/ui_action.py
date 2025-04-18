@@ -116,6 +116,7 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
         elif action == 'scroll_down':
             try:
                 pyautogui.scroll(-500)
+                time.sleep(1)
                 print("[INFO] Scrolled Down success")
             except:
                 print("[Warn] Scrolled Down failed")
@@ -323,6 +324,7 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
         elif action == 'scroll_down':
             try:
                 pyautogui.scroll(-500)
+                time.sleep(1)
                 print("[INFO] Scrolled Down success")
             except:
                 print("[Warn] Scrolled Down failed")
