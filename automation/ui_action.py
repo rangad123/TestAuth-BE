@@ -162,7 +162,7 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 word_count = len(element_name.split())
                 click_type = 3 if word_count > 1 else 2
 
-                pyautogui.Click(click_X, click_Y, clicks=click_type)
+                pyautogui.click(click_X, click_Y, clicks=click_type)
                 time.sleep(0.5)
                 pyautogui.hotkey('ctrl', 'c')
                 time.sleep(0.5)
@@ -370,7 +370,7 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 word_count = len(element_name.split())
                 click_type = 3 if word_count > 1 else 2
 
-                pyautogui.Click(click_X, click_Y, clicks=click_type)
+                pyautogui.click(click_X, click_Y, clicks=click_type)
                 time.sleep(0.5)
                 pyautogui.hotkey('ctrl', 'c')
                 time.sleep(0.5)
