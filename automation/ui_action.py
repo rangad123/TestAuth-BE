@@ -390,8 +390,7 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 return {
                     "status": "success",
                     "copied_text": copied_text,
-                    "screenshot": screenshot_url,
-                    "coordinates": omniparser_response
+                    "screenshot": screenshot_url
                 }
             except Exception as e:
                 return {

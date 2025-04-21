@@ -1,8 +1,6 @@
-
 from django.db import models
 from api.models import User
-import uuid
-
+import uuid 
 
 class EXEDownload(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -27,10 +25,5 @@ class SystemInfo(models.Model):
     screen_resolution = models.CharField(max_length=50)
     ip_address = models.GenericIPAddressField()
     mac_address = models.CharField(max_length=50)
+    system_fingerprint = models.CharField(max_length=1000) 
     created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = (
-            'user', 'os_name', 'os_version', 'architecture', 'cpu',
-            'ram', 'screen_resolution', 'ip_address', 'mac_address'
-        )
