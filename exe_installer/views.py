@@ -10,6 +10,7 @@ import platform, psutil, socket, uuid
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.views.decorators.csrf import csrf_exempt
 
 
 # Track download view (modified)
@@ -99,6 +100,7 @@ def get_system_info(user, request):
     }
 
 # EXE login view (modified)
+@csrf_exempt
 @api_view(['POST'])
 def EXE_login(request):
     download_uid = request.data.get('download_uid')
