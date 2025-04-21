@@ -30,7 +30,7 @@ class TrackDownloadView(APIView):
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        ip = request.META.get('HTTP_X_FORWARDED_FOR') or request.META.get('REMOTE_ADDR')
+        ip = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR')
 
         # Check if EXEDownload already exists for this user and OS
         existing_download = EXEDownload.objects.filter(user=user, os_name=os_name, os_version=os_version).first()
@@ -85,6 +85,8 @@ def get_system_info(user, request):
     except Exception as e:
         screen_resolution = "Unknown"
 
+    ip = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or request.META.get('REMOTE_ADDR')
+
     return {
         "user": user.id,  # Will still pass user explicitly in .save()
         "os_name": platform.system(),
@@ -93,7 +95,7 @@ def get_system_info(user, request):
         "cpu": platform.processor(),
         "ram": psutil.virtual_memory().total // (1024 ** 3),
         "screen_resolution": screen_resolution,
-        "ip_address" : request.META.get('HTTP_X_FORWARDED_FOR') or request.META.get('REMOTE_ADDR') or "Unknown",
+        "ip_address" : ip,
         "mac_address": ":".join(
             ["{:02x}".format((uuid.getnode() >> bits) & 0xff) for bits in range(0, 2 * 6, 8)][::-1]
         ),
