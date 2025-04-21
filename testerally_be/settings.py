@@ -107,6 +107,9 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD', ''),
         'HOST': os.getenv('DB_HOST', 'localhost'),
         'PORT': os.getenv('DB_PORT', '3306'),
+        'OPTIONS': {
+            'sql_mode': 'STRICT_ALL_TABLES',
+        },
     }
 }
 

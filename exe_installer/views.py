@@ -1,8 +1,4 @@
 from django.shortcuts import render
-
-# Create your views here.
-# For .exe installation tracking code
-
 from django.http import JsonResponse  
 from api.models import User
 from .models import SystemInfo, EXEDownload
@@ -16,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 
+# Track download view (modified)
 class TrackDownloadView(APIView):
     permission_classes = []
 
@@ -33,15 +30,21 @@ class TrackDownloadView(APIView):
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
         ip = request.META.get('HTTP_X_FORWARDED_FOR') or request.META.get('REMOTE_ADDR')
-        unique_download_uid = str(uuid.uuid4())
 
+        # Check if EXEDownload already exists for this user and OS
+        existing_download = EXEDownload.objects.filter(user=user, os_name=os_name, os_version=os_version).first()
+        if existing_download:
+            return Response(EXEDownloadSerializer(existing_download).data)
+
+        # Create new EXEDownload entry
+        unique_download_uid = str(uuid.uuid4())
         new_download = EXEDownload.objects.create(
             user=user,
             os_name=os_name,
             os_version=os_version,
             ip_address=ip,
             download_uid=unique_download_uid,
-            download_count=1  # Optional: just to indicate this is the first for this record
+            download_count=1
         )
 
         serializer = EXEDownloadSerializer(new_download)
@@ -65,11 +68,19 @@ class TrackDownloadView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+# Helper function to generate system fingerprint
+def generate_system_fingerprint(user, request):
+    system_info = get_system_info(user, request)
+    return f"{system_info['os_name']}_{system_info['os_version']}_{system_info['cpu']}_{system_info['screen_resolution']}_{system_info['mac_address']}_{user.id}"
+
 # Function to collect system info
-def get_system_info(user):
+def get_system_info(user, request):
     try:
-        screen = get_monitors()[0]
-        screen_resolution = f"{screen.width}x{screen.height}"
+        screens = get_monitors()
+        if screens:
+            screen_resolution = f"{screens[0].width}x{screens[0].height}"
+        else:
+            screen_resolution = "Unknown"
     except Exception as e:
         screen_resolution = "Unknown"
 
@@ -81,15 +92,16 @@ def get_system_info(user):
         "cpu": platform.processor(),
         "ram": psutil.virtual_memory().total // (1024 ** 3),
         "screen_resolution": screen_resolution,
-        "ip_address": socket.gethostbyname(socket.gethostname()),
+        "ip_address" : request.META.get('HTTP_X_FORWARDED_FOR') or request.META.get('REMOTE_ADDR') or "Unknown",
         "mac_address": ":".join(
             ["{:02x}".format((uuid.getnode() >> bits) & 0xff) for bits in range(0, 2 * 6, 8)][::-1]
         ),
     }
 
-@api_view(['POST'])  # Changed to POST
+# EXE login view (modified)
+@api_view(['POST'])
 def EXE_login(request):
-    download_uid = request.data.get('download_uid')  # Get from body, not GET params
+    download_uid = request.data.get('download_uid')
 
     if not download_uid:
         return Response({"error": "Download_uid is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -100,21 +112,14 @@ def EXE_login(request):
         return Response({"error": "Download_uid does not match any agent"}, status=status.HTTP_400_BAD_REQUEST)
 
     user = agent_details.user
+    system_fingerprint = generate_system_fingerprint(user, request)
 
+    # Check if the system info matches
     try:
         agentsys_details = SystemInfo.objects.get(exe_download_id=agent_details.id)
 
-        current_system = get_system_info(user)
-
-        # Check if the system information matches
-        match = (
-            agentsys_details.os_name == current_system['os_name'] and
-            agentsys_details.cpu == current_system['cpu'] and
-            agentsys_details.mac_address == current_system['mac_address'] and
-            agentsys_details.screen_resolution == current_system['screen_resolution']
-        )
-
-        if match:
+        # Check system fingerprint
+        if agentsys_details.system_fingerprint == system_fingerprint:
             serializer = SystemInfoSerializer(agentsys_details)
             return Response({
                 "message": "Login successful on the same system",
@@ -124,37 +129,14 @@ def EXE_login(request):
             return Response({"error": "EXE is running on a different system"}, status=status.HTTP_403_FORBIDDEN)
 
     except SystemInfo.DoesNotExist:
-        # Get the current system information
-        system_data = get_system_info(user)
-
-        # Check if the system info already exists
-        existing_info = SystemInfo.objects.filter(
-            user=user,
-            os_name=system_data["os_name"],
-            os_version=system_data["os_version"],
-            architecture=system_data["architecture"],
-            cpu=system_data["cpu"],
-            ram=system_data["ram"],
-            screen_resolution=system_data["screen_resolution"],
-            ip_address=system_data["ip_address"],
-            mac_address=system_data["mac_address"],
-        ).first()
-
-        if existing_info:
-            # If system info already exists, return a response indicating that
-            return Response({
-                "message": "System info already exists for this agent. You can't run the agent on this system.",
-                "Key_error":"This agent_key created for different system you are entering in different system.",
-            }, status=400)
-
-        # Save the new system info
-        system_data["user"] = user.id  # Add user to the system data
-        system_data["exe_download"] = agent_details.id  # Add exe_download to the system data
+        system_data = get_system_info(user, request)
+        system_data["user"] = user.id
+        system_data["exe_download"] = agent_details.id
+        system_data["system_fingerprint"] = system_fingerprint
 
         serializer = SystemInfoSerializer(data=system_data)
-
         if serializer.is_valid():
-            serializer.save()  # Save the new system info
+            serializer.save()
             return Response({
                 "message": "System info saved successfully",
                 "data": serializer.data
