@@ -13,7 +13,6 @@ from rest_framework.views import APIView
 from django.views.decorators.csrf import csrf_exempt
 
 
-# Track download view (modified)
 class TrackDownloadView(APIView):
     permission_classes = []
 
@@ -21,9 +20,10 @@ class TrackDownloadView(APIView):
         user_id = request.data.get('user_id')
         os_name = request.data.get('os_name')
         os_version = request.data.get('os_version')
+        file_version = request.data.get('file_version')
 
-        if not user_id or not os_name or not os_version:
-            return Response({'error': 'user_id, os_name, and os_version are required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not user_id or not os_name or not os_version or not file_version:
+            return Response({'error': 'user_id, os_name, file_version and os_version are required'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             user = User.objects.get(id=user_id)
@@ -34,7 +34,17 @@ class TrackDownloadView(APIView):
 
         # Check if EXEDownload already exists for this user and OS
         existing_download = EXEDownload.objects.filter(user=user, os_name=os_name, os_version=os_version).first()
+
         if existing_download:
+            # Update file_version if it's different
+            if existing_download.file_version != file_version:
+                existing_download.file_version = file_version
+
+            # Always update IP, increment count, update timestamp
+            existing_download.ip_address = ip
+            existing_download.download_count += 1
+            existing_download.save()
+
             return Response(EXEDownloadSerializer(existing_download).data)
 
         # Create new EXEDownload entry
@@ -45,12 +55,13 @@ class TrackDownloadView(APIView):
             os_version=os_version,
             ip_address=ip,
             download_uid=unique_download_uid,
-            download_count=1
+            download_count=1,
+            file_version=file_version
         )
 
         serializer = EXEDownloadSerializer(new_download)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-
+        
     def get(self, request):
         user_id = request.query_params.get('user_id')
         if not user_id:
