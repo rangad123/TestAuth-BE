@@ -6,6 +6,10 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('handle_command/', views.handle_command, name='handle_command'),
     path('Execute_command/', views.Execute_command, name='Execute_command'),
+    path('run_testsuite/', views.run_testsuite, name='run_testsuite'),
+    path('wait/', views.wait, name='wait'),
+
+
     
 
     #re_path(r'^react_app/.*$', views.react_app, name='react_app'),
