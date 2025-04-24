@@ -480,6 +480,36 @@ class TestStepViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+    @action(detail=False, methods=['post'], url_path='insert-step')
+    def insert_step(self, request, *args, **kwargs):
+        """
+        Insert a new test step at a given step_number and shift others accordingly.
+        """
+        testcase_id = request.data.get('testcase_id')
+        step_number = request.data.get('step_number')
+
+        if not testcase_id or step_number is None:
+            return Response({"error": "Both 'testcase_id' and 'step_number' are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Shift step_numbers >= new step_number
+            TestStep.objects.filter(
+                testcase_id=testcase_id,
+                step_number__gte=step_number
+            ).update(step_number=F('step_number') + 1)
+
+            # Create the new step
+            serializer = self.get_serializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
     def update(self, request, *args, **kwargs):
         """
         Update a test step, including the test result.
