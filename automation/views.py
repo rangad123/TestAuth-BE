@@ -559,3 +559,53 @@ def Execute_command_internal(command, user_id, click_x, click_y):
     fake_request._body = json.dumps(request_data).encode("utf-8")
 
     return json.loads(Execute_command(fake_request).content.decode())
+
+
+
+
+
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+import json, time
+import pygetwindow as gw
+import win32gui, win32con
+
+@csrf_exempt
+def insert_screen(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Only POST allowed"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        user_id = data.get("user_id")
+
+        if not user_id:
+            return JsonResponse({"error": "Missing user_id"}, status=400)
+
+        # ✅ Maximize Chrome window before screenshot
+        chrome_windows = [win for win in gw.getWindowsWithTitle("Google Chrome") if win is not None]
+        if chrome_windows:
+            hwnd = chrome_windows[0]._hWnd
+            win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+            print(f"[INFO] Maximized Chrome window: {chrome_windows[0].title}")
+        else:
+            print("[WARN] No Chrome window found to maximize")
+
+        # ✅ Wait only 5 seconds 
+        time.sleep(5)
+
+        # Take screenshot
+        screenshot_path, screenshot_url = take_screenshot(user_id)
+
+        if screenshot_path:
+            omniparser_response = send_to_omniparser(screenshot_path)
+            return JsonResponse({
+                "status": "Screenshot Captured Based on User Screen",
+                "screenshot": screenshot_url,
+                "omniparser_data": omniparser_response
+            })
+        else:
+            return JsonResponse({"error": "Failed to take screenshot"}, status=500)
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
