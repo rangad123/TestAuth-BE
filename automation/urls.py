@@ -8,6 +8,8 @@ urlpatterns = [
     path('Execute_command/', views.Execute_command, name='Execute_command'),
     path('run_testsuite/', views.run_testsuite, name='run_testsuite'),
     path('wait/', views.wait, name='wait'),
+    path('insert_screen/', views.insert_screen, name='insert_screen'),
+
 
 
     
