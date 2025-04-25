@@ -600,7 +600,7 @@ def insert_screen(request):
         if screenshot_path:
             omniparser_response = send_to_omniparser(screenshot_path)
             return JsonResponse({
-                "status": "Screenshot Captured Based on User Screen",
+                "status": "Screenshot Captured Based on Screen",
                 "screenshot": screenshot_url,
                 "omniparser_data": omniparser_response
             })

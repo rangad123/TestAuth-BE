@@ -78,6 +78,27 @@ class TrackDownloadView(APIView):
 
         serializer = EXEDownloadSerializer(downloads, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+        
+    def put(self, request):
+        """
+        Cloud updates the is_update_available flag using download_uid
+        """
+        download_uid = request.data.get('download_uid')
+        is_update_available = request.data.get('is_update_available')  # 'yes' or 'no'
+
+        if not download_uid or is_update_available not in ['yes', 'no']:
+            return Response({'error': 'download_uid and valid is_update_available ("yes" or "no") required'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            exe = EXEDownload.objects.get(download_uid=download_uid)
+        except EXEDownload.DoesNotExist:
+            return Response({'error': 'Download UID not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        exe.is_update_available = is_update_available
+        exe.save()
+
+        return Response({'message': 'Update flag changed successfully'}, status=status.HTTP_200_OK)
 
 
 # Helper function to generate system fingerprint
