@@ -78,7 +78,7 @@ class TrackDownloadView(APIView):
 
         serializer = EXEDownloadSerializer(downloads, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-        
+
     def put(self, request):
         """
         Cloud updates the is_update_available flag using download_uid
@@ -104,7 +104,7 @@ class TrackDownloadView(APIView):
 # Helper function to generate system fingerprint
 def generate_system_fingerprint(user, request):
     system_info = get_system_info(user, request)
-    return f"{system_info['os_name']}_{system_info['os_version']}_{system_info['cpu']}_{system_info['screen_resolution']}_{system_info['mac_address']}_{user.id}"
+    return f"{system_info['os_name']}_{system_info['os_version']}_{system_info['cpu']}_{system_info['screen_resolution']}_{user.id}"
 
 # Function to collect system info
 def get_system_info(user, request):
