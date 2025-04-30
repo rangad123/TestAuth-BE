@@ -9,6 +9,9 @@ urlpatterns = [
     path('run_testsuite/', views.run_testsuite, name='run_testsuite'),
     path('wait/', views.wait, name='wait'),
     path('insert_screen/', views.insert_screen, name='insert_screen'),
+    path('get_browser_tabs/', views.get_browser_tabs, name='get_browser_tabs'),
+    path('process_browser_tab/', views.process_browser_tab, name='process_browser_tab'),
+
 
 
 
