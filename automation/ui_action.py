@@ -196,7 +196,7 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
             return {"error": "Invalid action"}
 
         # Wait longer for any UI updates
-        time.sleep(3)
+        time.sleep(5)
 
         # Update the window title in our tracking
         print("[DEBUG] Updating window title after UI action")
@@ -407,7 +407,7 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
             return {"error": "Invalid action"}
 
         # Wait longer for any UI updates
-        time.sleep(3)
+        time.sleep(5)
 
         # Update the window title in our tracking
         print("[DEBUG] Updating window title after UI action")

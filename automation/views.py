@@ -18,6 +18,7 @@ import atexit
 import pygetwindow as gw
 import random
 from django.shortcuts import render
+from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from .browser_manager import open_browser, update_window_title
@@ -609,3 +610,115 @@ def insert_screen(request):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+
+
+def get_browser_windows():
+    """Get all browser windows with their titles."""
+    # Common browser window title identifiers
+    browser_identifiers = [
+        "Google Chrome",
+        "Mozilla Firefox",
+        "Microsoft Edge",
+        "Safari",
+        "Opera",
+        "Brave",
+    ]
+    
+    browser_windows = []
+    all_windows = gw.getAllWindows()
+    
+    for window in all_windows:
+        if window.title and any(browser in window.title for browser in browser_identifiers):
+            browser_windows.append({
+                "title": window.title,
+                "x": window.left,
+                "y": window.top,
+                "width": window.width,
+                "height": window.height,
+                "active": window.isActive
+            })
+    
+    return browser_windows
+
+@require_http_methods(["GET"])
+def get_browser_tabs(request):
+    """API to get all open browser tabs."""
+    try:
+        browser_windows = get_browser_windows()
+        return JsonResponse({
+            "status": "success",
+            "browser_tabs": browser_windows
+        })
+    except Exception as e:
+        return JsonResponse({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
+    
+
+def focus_window_by_title(title):
+    """Focus a window by its title."""
+    try:
+        windows = gw.getAllWindows()
+        for window in windows:
+            if title in window.title:
+                window.activate()
+                window.maximize()
+                # Give the window time to come into focus
+                time.sleep(0.5)
+                return True
+        return False
+    except Exception as e:
+        print(f"Error focusing window: {str(e)}")
+        return False
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def process_browser_tab(request):
+    """API to focus on a specific browser tab, take screenshot and process it."""
+    try:
+        data = json.loads(request.body)
+        tab_title = data.get('tab_title')
+        user_id = data.get('user_id', 'default')
+        
+        if not tab_title:
+            return JsonResponse({
+                "status": "error",
+                "message": "Tab title is required"
+            }, status=400)
+        
+        # Focus on the selected window
+        if not focus_window_by_title(tab_title):
+            return JsonResponse({
+                "status": "error",
+                "message": f"Could not find or focus window with title: {tab_title}"
+            }, status=404)
+        
+
+        time.sleep(3)
+        # Take screenshot
+        screenshot_path, screenshot_url = take_screenshot(user_id)
+        
+        
+        if not screenshot_path:
+            return JsonResponse({
+                "status": "error",
+                "message": "Failed to take screenshot"
+            }, status=500)
+        
+        # Send to omniparser
+        omniparser_response = send_to_omniparser(screenshot_path)
+        
+        return JsonResponse({
+            "status": "success",
+            "message": "Screenshot captured based on screen",
+            "screenshot": screenshot_url,
+            "omniparser_data": omniparser_response
+        })
+    except Exception as e:
+        return JsonResponse({
+            "status": "error",
+            "message": str(e)
+        }, status=500)
