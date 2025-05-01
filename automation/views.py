@@ -780,6 +780,63 @@ def multi_approach_focus_window(hwnd):
         logger.error(f"Error focusing window (hwnd={hwnd}): {e}")
         return False
 
+def multi_approach_minimize_window(hwnd):
+    """Use multiple approaches to minimize a window reliably across different browsers."""
+    try:
+        # Track if any of our approaches worked
+        minimized = False
+        
+        # Approach 1: Standard Win32 API approach
+        try:
+            win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+            time.sleep(0.5)
+            minimized = win32gui.IsIconic(hwnd)
+        except Exception as e:
+            logger.debug(f"First minimize approach failed: {e}")
+        
+        # Approach 2: Try using SendMessage
+        if not minimized:
+            try:
+                win32gui.SendMessage(hwnd, win32con.WM_SYSCOMMAND, win32con.SC_MINIMIZE, 0)
+                time.sleep(0.5)
+                minimized = win32gui.IsIconic(hwnd)
+            except Exception as e:
+                logger.debug(f"Second minimize approach failed: {e}")
+        
+        # Approach 3: Try using PostMessage
+        if not minimized:
+            try:
+                win32gui.PostMessage(hwnd, win32con.WM_SYSCOMMAND, win32con.SC_MINIMIZE, 0)
+                time.sleep(0.5)
+                minimized = win32gui.IsIconic(hwnd)
+            except Exception as e:
+                logger.debug(f"Third minimize approach failed: {e}")
+        
+        # Approach 4: Try using pygetwindow directly if available
+        if not minimized:
+            try:
+                window = gw.Window(hwnd)
+                window.minimize()
+                time.sleep(0.5)
+                minimized = win32gui.IsIconic(hwnd)
+            except Exception as e:
+                logger.debug(f"Fourth minimize approach failed: {e}")
+        
+        # Approach 5: Try using user32.dll directly
+        if not minimized:
+            try:
+                user32 = ctypes.WinDLL('user32', use_last_error=True)
+                user32.CloseWindow(hwnd)  # CloseWindow actually minimizes the window
+                time.sleep(0.5)
+                minimized = win32gui.IsIconic(hwnd)
+            except Exception as e:
+                logger.debug(f"Fifth minimize approach failed: {e}")
+        
+        return minimized
+    except Exception as e:
+        logger.error(f"Error minimizing window (hwnd={hwnd}): {e}")
+        return False
+    
 def focus_window_by_title(title):
     """Focus a window by its title using multiple approaches."""
     try:
@@ -858,6 +915,32 @@ def get_browser_tabs(request):
     """API to get all open browser tabs."""
     try:
         browser_windows = get_browser_windows()
+        
+        # Enhance the response with browser identification
+        for window in browser_windows:
+            # Try to identify the browser type based on process or title
+            if 'pid' in window:
+                try:
+                    process = psutil.Process(window['pid'])
+                    process_name = process.name().lower()
+                    for browser_name, process_identifiers in BROWSER_IDENTIFIERS.items():
+                        if any(identifier.lower() in process_name for identifier in process_identifiers):
+                            window['browser_name'] = browser_name
+                            break
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+            
+            # If we couldn't identify by process, try by title
+            if 'browser_name' not in window and 'title' in window:
+                for browser_name in BROWSER_IDENTIFIERS.keys():
+                    if browser_name.lower() in window['title'].lower():
+                        window['browser_name'] = browser_name
+                        break
+            
+            # If still not identified, mark as unknown
+            if 'browser_name' not in window:
+                window['browser_name'] = "Unknown Browser"
+        
         return JsonResponse({
             "status": "success",
             "browser_tabs": browser_windows
@@ -872,13 +955,14 @@ def get_browser_tabs(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 def process_browser_tab(request):
-    """API to focus on a specific browser tab."""
+    """API to focus on a specific browser tab, take screenshot, and minimize browser window."""
     try:
         data = json.loads(request.body)
         tab_title = data.get('tab_title')
         hwnd = data.get('hwnd')  # Window handle if available
         browser_name = data.get('browser_name')  # Optional browser name for fallback
         user_id = data.get('user_id', 'default')
+        active_hwnd = None  # Store the activated window handle for later minimization
         
         if not tab_title and not hwnd and not browser_name:
             return JsonResponse({
@@ -894,6 +978,8 @@ def process_browser_tab(request):
             try:
                 hwnd_int = int(hwnd)
                 focused = multi_approach_focus_window(hwnd_int)
+                if focused:
+                    active_hwnd = hwnd_int
                 logger.info(f"Focus by hwnd ({hwnd_int}): {'Success' if focused else 'Failed'}")
             except ValueError:
                 logger.warning(f"Invalid hwnd value: {hwnd}")
@@ -901,11 +987,17 @@ def process_browser_tab(request):
         # Approach 2: Try with window title
         if tab_title and not focused:
             focused = focus_window_by_title(tab_title)
+            if focused:
+                # Get the handle of the focused window
+                active_hwnd = win32gui.GetForegroundWindow()
             logger.info(f"Focus by title ({tab_title}): {'Success' if focused else 'Failed'}")
         
         # Approach 3: Try with browser process name as fallback
         if browser_name and not focused:
             focused = focus_browser_process_main_window(browser_name)
+            if focused:
+                # Get the handle of the focused window
+                active_hwnd = win32gui.GetForegroundWindow()
             logger.info(f"Focus by browser name ({browser_name}): {'Success' if focused else 'Failed'}")
         
         if not focused:
@@ -926,14 +1018,23 @@ def process_browser_tab(request):
                 "message": "Failed to take screenshot"
             }, status=500)
         
+        # Now minimize the browser window after screenshot is taken
+        minimized = False
+        if active_hwnd:
+            minimized = multi_approach_minimize_window(active_hwnd)
+            logger.info(f"Window minimization: {'Success' if minimized else 'Failed'}")
+        
         # Send to omniparser - calling your existing function
         omniparser_response = send_to_omniparser(screenshot_path)
-        
+
+
         return JsonResponse({
             "status": "success",
-            "message": "Screenshot captured successfully",
+            "message": "Screenshot captured successfully" + 
+                       (", browser minimized" if minimized else ", browser minimization failed"),
             "screenshot": screenshot_url,
-            "omniparser_data": omniparser_response
+            "omniparser_data": omniparser_response,
+            "browser_minimized": minimized
         })
     except Exception as e:
         logger.error(f"Error in process_browser_tab: {e}", exc_info=True)
