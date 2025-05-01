@@ -614,13 +614,24 @@ def insert_screen(request):
 
 
 
+import json
+import time
+import pygetwindow as gw
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
+import win32gui
+import win32con
+import win32process
+import psutil
+
 def get_browser_windows():
     """Get all browser windows with their titles."""
     # Common browser window title identifiers
     browser_identifiers = [
         "Google Chrome",
         "Mozilla Firefox",
-        "Microsoft Edge",
+        "Edge",
         "Safari",
         "Opera",
         "Brave",
@@ -637,7 +648,8 @@ def get_browser_windows():
                 "y": window.top,
                 "width": window.width,
                 "height": window.height,
-                "active": window.isActive
+                "active": window.isActive,
+                "hwnd": window._hWnd  # Store window handle for more reliable activation
             })
     
     return browser_windows
@@ -656,22 +668,65 @@ def get_browser_tabs(request):
             "status": "error",
             "message": str(e)
         }, status=500)
-    
 
 def focus_window_by_title(title):
-    """Focus a window by its title."""
+    """Focus a window by its title using Win32 API for more reliable activation."""
     try:
         windows = gw.getAllWindows()
         for window in windows:
             if title in window.title:
-                window.activate()
-                window.maximize()
+                # Use the Win32 API to more reliably set focus
+                hwnd = window._hWnd
+                
+                # Bring the window to the foreground
+                if win32gui.IsIconic(hwnd):  # If minimized
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                
+                # Set foreground window more reliably
+                win32gui.SetForegroundWindow(hwnd)
+                
+                # Make sure the window is visible and maximized
+                win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+                win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                
                 # Give the window time to come into focus
-                time.sleep(0.5)
-                return True
+                time.sleep(1.0)
+                
+                # Verify activation was successful
+                if win32gui.GetForegroundWindow() == hwnd:
+                    return True
+                else:
+                    # Try alternative approach with window flashing
+                    win32gui.FlashWindow(hwnd, True)
+                    win32gui.SetForegroundWindow(hwnd)
+                    time.sleep(0.5)
+                    return win32gui.GetForegroundWindow() == hwnd
+        
         return False
     except Exception as e:
         print(f"Error focusing window: {str(e)}")
+        return False
+
+def focus_window_by_hwnd(hwnd):
+    """Focus a window by its handle directly."""
+    try:
+        # Restore the window if it's minimized
+        if win32gui.IsIconic(hwnd):
+            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+        
+        # Bring window to foreground
+        win32gui.SetForegroundWindow(hwnd)
+        
+        # Make sure it's visible and maximized
+        win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+        
+        # Give the window time to come into focus
+        time.sleep(1.0)
+        
+        return win32gui.GetForegroundWindow() == hwnd
+    except Exception as e:
+        print(f"Error focusing window by handle: {str(e)}")
         return False
 
 @csrf_exempt
@@ -681,26 +736,37 @@ def process_browser_tab(request):
     try:
         data = json.loads(request.body)
         tab_title = data.get('tab_title')
+        hwnd = data.get('hwnd')  # New: accept window handle directly if available
         user_id = data.get('user_id', 'default')
         
-        if not tab_title:
+        if not tab_title and not hwnd:
             return JsonResponse({
                 "status": "error",
-                "message": "Tab title is required"
+                "message": "Either tab_title or hwnd is required"
             }, status=400)
         
         # Focus on the selected window
-        if not focus_window_by_title(tab_title):
+        focused = False
+        
+        # Try with hwnd first if provided (most reliable)
+        if hwnd:
+            focused = focus_window_by_hwnd(int(hwnd))
+        
+        # Fall back to title-based focus if hwnd not provided or failed
+        if not focused and tab_title:
+            focused = focus_window_by_title(tab_title)
+        
+        if not focused:
             return JsonResponse({
                 "status": "error",
                 "message": f"Could not find or focus window with title: {tab_title}"
             }, status=404)
         
-
+        # Extra delay to ensure window is fully focused
         time.sleep(3)
-        # Take screenshot
-        screenshot_path, screenshot_url = take_screenshot(user_id)
         
+        # Take screenshot - assuming this function exists elsewhere as mentioned
+        screenshot_path, screenshot_url = take_screenshot(user_id)
         
         if not screenshot_path:
             return JsonResponse({
@@ -708,7 +774,7 @@ def process_browser_tab(request):
                 "message": "Failed to take screenshot"
             }, status=500)
         
-        # Send to omniparser
+        # Send to omniparser - assuming this function exists elsewhere as mentioned
         omniparser_response = send_to_omniparser(screenshot_path)
         
         return JsonResponse({
