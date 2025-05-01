@@ -498,3 +498,253 @@ def activate_user_window(user_id, url=None):
 
     print("[ERROR] No Chrome windows found for activation.")
     return False
+
+
+#This is for runtest code based on frontend
+def Run_test_activate_window(window_info):
+    """Activate a window using advanced techniques"""
+    if not window_info:
+        return False
+
+    # Extract necessary information
+    title = window_info.get('title')
+    hwnd = window_info.get('hwnd')
+    pid = window_info.get('pid')
+    window_obj = window_info.get('window')
+    is_maximized = window_info.get('isMaximized', False)
+
+    print(f"[INFO] Attempting to activate window: {title}, PID: {pid}, Handle: {hwnd}")
+
+    # For Windows, use advanced techniques
+    if sys.platform == 'win32':
+        # Disable focus stealing prevention
+        disable_focus_stealing_prevention()
+
+        # Try using direct Windows API approach first (most reliable)
+        if hwnd:
+            try:
+                # Get thread IDs
+                foreground_hwnd = user32.GetForegroundWindow()
+                curr_thread = win32api.GetCurrentThreadId()
+                fore_thread = user32.GetWindowThreadProcessId(foreground_hwnd, None)
+
+                # Attach thread input to bypass focus restrictions
+                attached = False
+                if curr_thread != fore_thread:
+                    attached = user32.AttachThreadInput(curr_thread, fore_thread, True)
+                    if attached:
+                        print("[INFO] Successfully attached thread input")
+
+                try:
+                    # Step 1: Change window state to reset any fullscreen/maximized states
+                    user32.BringWindowToTop(hwnd)
+                    result = user32.SetForegroundWindow(hwnd)
+                    user32.SetActiveWindow(hwnd)
+                    user32.SetFocus(hwnd)
+
+                    if not result:
+                        print("[INFO] Direct focus failed, trying state change...")
+                        # If it was maximized, preserve that state
+                        if is_maximized:
+                            # Just set foreground without changing state
+                            user32.SetForegroundWindow(hwnd)
+                        else:
+                            # For non-maximized windows, we can try restore
+                            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                            time.sleep(0.2)
+                            user32.SetForegroundWindow(hwnd)
+
+                    # Verify success
+                    time.sleep(0.5)
+                    active_hwnd = user32.GetForegroundWindow()
+                    if active_hwnd == hwnd:
+                        print(f"[INFO] Successfully activated window using hwnd: {title}")
+                        return True
+                    else:
+                        print(f"[WARN] Direct activation failed. Current={active_hwnd}, Target={hwnd}")
+                finally:
+                    if attached:
+                        user32.AttachThreadInput(curr_thread, fore_thread, False)
+                        print("[INFO] Detached thread input")
+
+                if not user32.GetForegroundWindow() == hwnd:
+                    print("[INFO] Trying minimize-restore cycle as last resort...")
+                    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                    time.sleep(0.5)
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                    time.sleep(0.3)
+
+                    # If it was maximized, maximize it again
+                    if is_maximized:
+                        time.sleep(0.2)
+                        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+
+                    win32gui.SetForegroundWindow(hwnd)
+                    time.sleep(0.2)
+
+                    # Check if window is now active
+                    active_hwnd = user32.GetForegroundWindow()
+                    if active_hwnd == hwnd:
+                        print(f"[INFO] Successfully activated window using minimize-restore: {title}")
+                        return True
+
+
+            except Exception as e:
+                print(f"[ERROR] Failed to activate with hwnd: {e}")
+                traceback.print_exc()
+
+        # Try using pygetwindow as backup
+        if window_obj:
+            try:
+                # Try direct activation first
+                window_obj.activate()
+                time.sleep(0.5)
+
+                # Check if we succeeded
+                active_window = gw.getActiveWindow()
+                if active_window and active_window.title == title:
+                    print(f"[INFO] Successfully activated window with direct pygetwindow: {title}")
+                    return True
+
+                # If not successful, try minimize-restore cycle only for this window
+                print("[INFO] Direct pygetwindow activation failed, trying minimize-restore")
+                window_obj.minimize()
+                time.sleep(0.5)
+                window_obj.restore()
+                time.sleep(0.3)
+
+                # If it was maximized, maximize it again
+                if window_info.get('isMaximized'):
+                    time.sleep(0.2)
+                    window_obj.maximize()
+
+                # Verify activation
+                time.sleep(0.5)
+                active_window = gw.getActiveWindow()
+                if active_window and active_window.title == title:
+                    print(f"[INFO] Successfully activated window with pygetwindow cycle: {title}")
+                    return True
+            except Exception as e:
+                print(f"[ERROR] Failed to activate with pygetwindow: {e}")
+                traceback.print_exc()
+
+        # As a last resort, try simulated key presses
+        try:
+            # Simulate Alt+Tab press
+            print("[INFO] Trying Alt+Tab technique...")
+            pyautogui.keyDown('alt')
+            time.sleep(0.1)
+            pyautogui.press('tab')
+            time.sleep(0.5)
+            pyautogui.keyUp('alt')
+            time.sleep(0.5)
+
+            # Check if we got lucky
+            active_window = gw.getActiveWindow()
+            if active_window and (title in active_window.title):
+                print(f"[INFO] Successfully activated with Alt+Tab: {active_window.title}")
+                return True
+
+            # One more extreme measure - try Windows+D to show desktop then Alt+Tab
+            print("[INFO] Trying Windows+D then Alt+Tab...")
+            pyautogui.hotkey('win', 'd')
+            time.sleep(0.5)
+            pyautogui.keyDown('alt')
+            time.sleep(0.1)
+            pyautogui.press('tab')
+            time.sleep(0.5)
+            pyautogui.keyUp('alt')
+            time.sleep(0.5)
+
+            # Check again
+            active_window = gw.getActiveWindow()
+            if active_window and (title in active_window.title):
+                print(f"[INFO] Successfully activated with Windows+D and Alt+Tab: {active_window.title}")
+                return True
+        except Exception as e:
+            print(f"[ERROR] Keypress techniques failed: {e}")
+            traceback.print_exc()
+
+    print(f"[ERROR] All activation techniques failed for window: {title}")
+    return False
+
+
+def Run_test_activate_user_window(user_id, url=None):
+    """Activate the correct window for a user's session based on window_key."""
+    if user_id not in user_sessions:
+        print(f"[INFO] Creating new session for user {user_id}")
+        user_sessions[user_id] = {'last_active': time.time(), 'windows': {}}
+
+    session_data = user_sessions[user_id]
+    windows = session_data.get('windows', {})
+    chrome_windows = get_chrome_windows()  # Fetch all active Chrome windows
+
+    print(f"[DEBUG] Available Chrome windows: {len(chrome_windows)}")
+    for cw in chrome_windows:
+        print(f"[DEBUG] Window: {cw.get('title', 'Unknown')}, PID: {cw.get('pid', 'Unknown')}")
+
+    # Track checked windows to avoid duplicates
+    checked_windows = set()
+
+    print(f"[DEBUG] activate_user_window - User: {user_id}, URL: {url}")
+    print(f"[DEBUG] All window keys for user: {list(windows.keys())}")
+
+    # **Step 1: Activate Current Window (If Available)**
+    if session_data.get('current_window') in windows:
+        current_key = session_data['current_window']
+        window_info = windows[current_key]
+
+        for chrome_window in chrome_windows:
+            if chrome_window.get('hwnd') == window_info.get('hwnd'):
+                print(f"[INFO] Activating window using key: {current_key} -> {chrome_window.get('title')}")
+                result = Run_test_activate_window(chrome_window)
+                if result:
+                    window_info['last_activated'] = time.time()  # Update last active time
+                    return True
+                checked_windows.add(chrome_window.get('hwnd'))
+
+    # **Step 2: Find and Activate the Correct Window Based on URL**
+    if url:
+        matching_keys = [k for k in windows.keys() if k.startswith(f"{url}_")]
+        for key in sorted(matching_keys, key=lambda k: windows[k].get('last_activated', 0), reverse=True):
+            window_info = windows[key]
+
+            for chrome_window in chrome_windows:
+                if chrome_window.get('hwnd') in checked_windows:
+                    continue
+
+                if chrome_window.get('hwnd') == window_info.get('hwnd'):
+                    print(f"[INFO] Found exact match for URL {url}: {chrome_window.get('title')}")
+                    result = Run_test_activate_window(chrome_window)
+                    if result:
+                        session_data['current_window'] = key
+                        window_info['last_activated'] = time.time()
+                        return True
+                    checked_windows.add(chrome_window.get('hwnd'))
+
+    # **Step 3: Try Activating the Most Recently Used Window**
+    sorted_keys = sorted(windows.keys(), key=lambda k: windows[k].get('last_activated', 0), reverse=True)
+    for key in sorted_keys:
+        window_info = windows[key]
+
+        for chrome_window in chrome_windows:
+            if chrome_window.get('hwnd') in checked_windows:
+                continue
+
+            if chrome_window.get('hwnd') == window_info.get('hwnd'):
+                print(f"[INFO] Fallback activation using window key: {key} -> {chrome_window.get('title')}")
+                result = Run_test_activate_window(chrome_window)
+                if result:
+                    session_data['current_window'] = key
+                    window_info['last_activated'] = time.time()
+                    return True
+                checked_windows.add(chrome_window.get('hwnd'))
+
+    # **Step 4: Last Resort - Activate the First Available Chrome Window**
+    for chrome_window in chrome_windows:
+        if chrome_window.get('hwnd') not in checked_windows:
+            print(f"[WARN] No exact match found, activating first available Chrome window: {chrome_window.get('title')}")
+            return Run_test_activate_window(chrome_window)
+
+    print("[ERROR] No Chrome windows found for activation.")
+    return False
