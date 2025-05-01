@@ -390,11 +390,7 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 return {
                     "status": "success",
                     "copied_text": copied_text,
-<<<<<<< HEAD
-                    "screenshot": screenshot_url,
-=======
                     "screenshot": screenshot_url
->>>>>>> c65d011d23e28c45aa619a726d407c7949df2aa5
                 }
             except Exception as e:
                 return {

@@ -620,7 +620,7 @@ def get_browser_windows():
     browser_identifiers = [
         "Google Chrome",
         "Mozilla Firefox",
-        "Microsoft Edge",
+        "Edge",
         "Safari",
         "Opera",
         "Brave",
