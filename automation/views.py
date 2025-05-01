@@ -616,43 +616,233 @@ def insert_screen(request):
 
 import json
 import time
+import logging
+from collections import defaultdict
 import pygetwindow as gw
-from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
 import win32gui
 import win32con
 import win32process
+import win32api
+import win32com.client
+import ctypes
 import psutil
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
+
+# Set up logging
+logger = logging.getLogger(__name__)
+
+# Constants
+BROWSER_PROCESS_NAMES = {
+    "chrome.exe": "Google Chrome",
+    "firefox.exe": "Mozilla Firefox", 
+    "msedge.exe": "Microsoft Edge",
+    "brave.exe": "Brave",
+    "opera.exe": "Opera",
+    "safari.exe": "Safari"
+}
+
+# Map browser identifiers to their process names
+BROWSER_IDENTIFIERS = {
+    "Google Chrome": ["chrome", "chrome.exe"],
+    "Mozilla Firefox": ["firefox", "firefox.exe"],
+    "Microsoft Edge": ["msedge", "edge", "msedge.exe"],
+    "Safari": ["safari", "safari.exe"],
+    "Opera": ["opera", "opera.exe"],
+    "Brave": ["brave", "brave.exe"]
+}
+
+def get_process_windows():
+    """Get all windows mapped to their process names for more accurate detection."""
+    windows_by_process = defaultdict(list)
+    
+    try:
+        def enum_windows_proc(hwnd, lParam):
+            if win32gui.IsWindowVisible(hwnd) and win32gui.GetWindowText(hwnd):
+                _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                try:
+                    process = psutil.Process(pid)
+                    process_name = process.name().lower()
+                    title = win32gui.GetWindowText(hwnd)
+                    
+                    # Store window information
+                    if title.strip():  # Only consider windows with non-empty titles
+                        try:
+                            window = gw.Window(hwnd)
+                            windows_by_process[process_name].append({
+                                "title": title,
+                                "x": window.left,
+                                "y": window.top,
+                                "width": window.width,
+                                "height": window.height,
+                                "active": window == gw.getActiveWindow(),
+                                "hwnd": hwnd,
+                                "pid": pid
+                            })
+                        except Exception as e:
+                            logger.warning(f"Error getting window details: {e}")
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+                return True
+            return True
+        
+        win32gui.EnumWindows(enum_windows_proc, 0)
+    except Exception as e:
+        logger.error(f"Error enumerating windows: {e}")
+    
+    return windows_by_process
 
 def get_browser_windows():
-    """Get all browser windows with their titles."""
-    # Common browser window title identifiers
-    browser_identifiers = [
-        "Google Chrome",
-        "Mozilla Firefox",
-        "Edge",
-        "Safari",
-        "Opera",
-        "Brave",
-    ]
-    
+    """Get all browser windows with their titles, with improved detection."""
     browser_windows = []
-    all_windows = gw.getAllWindows()
-    
-    for window in all_windows:
-        if window.title and any(browser in window.title for browser in browser_identifiers):
-            browser_windows.append({
-                "title": window.title,
-                "x": window.left,
-                "y": window.top,
-                "width": window.width,
-                "height": window.height,
-                "active": window.isActive,
-                "hwnd": window._hWnd  # Store window handle for more reliable activation
-            })
+    try:
+        # Get all windows by process
+        windows_by_process = get_process_windows()
+        
+        # First, try to find browser windows by process name (most reliable)
+        for process_name, process_windows in windows_by_process.items():
+            for browser_process, browser_name in BROWSER_PROCESS_NAMES.items():
+                if browser_process.lower() in process_name:
+                    browser_windows.extend(process_windows)
+        
+        # As a fallback, check window titles as well
+        all_windows = gw.getAllWindows()
+        for window in all_windows:
+            if window.title and any(browser in window.title for browser in BROWSER_IDENTIFIERS.keys()):
+                # Check if window is already in our list
+                if not any(w.get('hwnd') == window._hWnd for w in browser_windows):
+                    browser_windows.append({
+                        "title": window.title,
+                        "x": window.left,
+                        "y": window.top,
+                        "width": window.width,
+                        "height": window.height,
+                        "active": window.isActive,
+                        "hwnd": window._hWnd
+                    })
+    except Exception as e:
+        logger.error(f"Error getting browser windows: {e}")
     
     return browser_windows
+
+def multi_approach_focus_window(hwnd):
+    """Use multiple approaches to focus a window reliably across different browsers."""
+    try:
+        # Approach 1: Standard Win32 API approach
+        if win32gui.IsIconic(hwnd):  # If minimized
+            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+        
+        win32gui.SetForegroundWindow(hwnd)
+        win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+        
+        # Give it a moment
+        time.sleep(0.5)
+        
+        # Check if successful
+        if win32gui.GetForegroundWindow() == hwnd:
+            return True
+            
+        # Approach 2: Using FlashWindow
+        win32gui.FlashWindow(hwnd, True)
+        win32gui.SetForegroundWindow(hwnd)
+        time.sleep(0.5)
+        
+        if win32gui.GetForegroundWindow() == hwnd:
+            return True
+            
+        # Approach 3: Using Windows shell
+        shell = win32com.client.Dispatch("WScript.Shell")
+        shell.SendKeys('%')  # Alt key to help with focus
+        win32gui.SetForegroundWindow(hwnd)
+        time.sleep(0.5)
+        
+        if win32gui.GetForegroundWindow() == hwnd:
+            return True
+            
+        # Approach 4: Using another Win32 API method
+        user32 = ctypes.WinDLL('user32', use_last_error=True)
+        user32.SwitchToThisWindow(hwnd, True)
+        time.sleep(0.5)
+        
+        return win32gui.GetForegroundWindow() == hwnd
+    except Exception as e:
+        logger.error(f"Error focusing window (hwnd={hwnd}): {e}")
+        return False
+
+def focus_window_by_title(title):
+    """Focus a window by its title using multiple approaches."""
+    try:
+        # Try with direct window object first
+        windows = gw.getAllWindows()
+        for window in windows:
+            if title in window.title:
+                return multi_approach_focus_window(window._hWnd)
+        
+        # Try with win32gui as a backup
+        def callback(hwnd, strings):
+            if win32gui.IsWindowVisible(hwnd) and title in win32gui.GetWindowText(hwnd):
+                strings.append(hwnd)
+            return True
+        
+        found_hwnds = []
+        win32gui.EnumWindows(callback, found_hwnds)
+        
+        if found_hwnds:
+            return multi_approach_focus_window(found_hwnds[0])
+        
+        return False
+    except Exception as e:
+        logger.error(f"Error focusing window by title '{title}': {e}")
+        return False
+
+def get_active_windows_by_pid(pid):
+    """Get all windows belonging to a specific process ID."""
+    windows = []
+    
+    def callback(hwnd, windows_list):
+        if win32gui.IsWindowVisible(hwnd):
+            _, window_pid = win32process.GetWindowThreadProcessId(hwnd)
+            if window_pid == pid and win32gui.GetWindowText(hwnd).strip():
+                windows_list.append(hwnd)
+        return True
+    
+    win32gui.EnumWindows(callback, windows)
+    return windows
+
+def focus_browser_process_main_window(browser_name):
+    """Find and focus the main window of a browser process."""
+    try:
+        # Get potential process names for this browser
+        process_names = []
+        for browser, identifiers in BROWSER_IDENTIFIERS.items():
+            if browser_name.lower() in browser.lower():
+                process_names.extend(identifiers)
+        
+        if not process_names:
+            logger.warning(f"No process names found for browser: {browser_name}")
+            return False
+        
+        # Find processes matching these names
+        for proc in psutil.process_iter(['pid', 'name']):
+            try:
+                process_name = proc.info['name'].lower()
+                if any(name.lower() in process_name for name in process_names):
+                    # Get all windows for this process
+                    windows = get_active_windows_by_pid(proc.info['pid'])
+                    
+                    # Try to focus each window until one succeeds
+                    for hwnd in windows:
+                        if multi_approach_focus_window(hwnd):
+                            return True
+            except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+                continue
+        
+        return False
+    except Exception as e:
+        logger.error(f"Error focusing browser main window for {browser_name}: {e}")
+        return False
 
 @require_http_methods(["GET"])
 def get_browser_tabs(request):
@@ -664,108 +854,61 @@ def get_browser_tabs(request):
             "browser_tabs": browser_windows
         })
     except Exception as e:
+        logger.error(f"Error in get_browser_tabs: {e}")
         return JsonResponse({
             "status": "error",
             "message": str(e)
         }, status=500)
 
-def focus_window_by_title(title):
-    """Focus a window by its title using Win32 API for more reliable activation."""
-    try:
-        windows = gw.getAllWindows()
-        for window in windows:
-            if title in window.title:
-                # Use the Win32 API to more reliably set focus
-                hwnd = window._hWnd
-                
-                # Bring the window to the foreground
-                if win32gui.IsIconic(hwnd):  # If minimized
-                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                
-                # Set foreground window more reliably
-                win32gui.SetForegroundWindow(hwnd)
-                
-                # Make sure the window is visible and maximized
-                win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
-                win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
-                
-                # Give the window time to come into focus
-                time.sleep(1.0)
-                
-                # Verify activation was successful
-                if win32gui.GetForegroundWindow() == hwnd:
-                    return True
-                else:
-                    # Try alternative approach with window flashing
-                    win32gui.FlashWindow(hwnd, True)
-                    win32gui.SetForegroundWindow(hwnd)
-                    time.sleep(0.5)
-                    return win32gui.GetForegroundWindow() == hwnd
-        
-        return False
-    except Exception as e:
-        print(f"Error focusing window: {str(e)}")
-        return False
-
-def focus_window_by_hwnd(hwnd):
-    """Focus a window by its handle directly."""
-    try:
-        # Restore the window if it's minimized
-        if win32gui.IsIconic(hwnd):
-            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-        
-        # Bring window to foreground
-        win32gui.SetForegroundWindow(hwnd)
-        
-        # Make sure it's visible and maximized
-        win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
-        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
-        
-        # Give the window time to come into focus
-        time.sleep(1.0)
-        
-        return win32gui.GetForegroundWindow() == hwnd
-    except Exception as e:
-        print(f"Error focusing window by handle: {str(e)}")
-        return False
-
 @csrf_exempt
 @require_http_methods(["POST"])
 def process_browser_tab(request):
-    """API to focus on a specific browser tab, take screenshot and process it."""
+    """API to focus on a specific browser tab."""
     try:
         data = json.loads(request.body)
         tab_title = data.get('tab_title')
-        hwnd = data.get('hwnd')  # New: accept window handle directly if available
+        hwnd = data.get('hwnd')  # Window handle if available
+        browser_name = data.get('browser_name')  # Optional browser name for fallback
         user_id = data.get('user_id', 'default')
         
-        if not tab_title and not hwnd:
+        if not tab_title and not hwnd and not browser_name:
             return JsonResponse({
                 "status": "error",
-                "message": "Either tab_title or hwnd is required"
+                "message": "Either tab_title, hwnd, or browser_name is required"
             }, status=400)
         
-        # Focus on the selected window
+        # Try multiple approaches to focus the window
         focused = False
         
-        # Try with hwnd first if provided (most reliable)
-        if hwnd:
-            focused = focus_window_by_hwnd(int(hwnd))
+        # Approach 1: Try with window handle (most reliable)
+        if hwnd and not focused:
+            try:
+                hwnd_int = int(hwnd)
+                focused = multi_approach_focus_window(hwnd_int)
+                logger.info(f"Focus by hwnd ({hwnd_int}): {'Success' if focused else 'Failed'}")
+            except ValueError:
+                logger.warning(f"Invalid hwnd value: {hwnd}")
         
-        # Fall back to title-based focus if hwnd not provided or failed
-        if not focused and tab_title:
+        # Approach 2: Try with window title
+        if tab_title and not focused:
             focused = focus_window_by_title(tab_title)
+            logger.info(f"Focus by title ({tab_title}): {'Success' if focused else 'Failed'}")
+        
+        # Approach 3: Try with browser process name as fallback
+        if browser_name and not focused:
+            focused = focus_browser_process_main_window(browser_name)
+            logger.info(f"Focus by browser name ({browser_name}): {'Success' if focused else 'Failed'}")
         
         if not focused:
             return JsonResponse({
                 "status": "error",
-                "message": f"Could not find or focus window with title: {tab_title}"
+                "message": f"Could not focus requested window. Please ensure the browser is running."
             }, status=404)
         
         # Extra delay to ensure window is fully focused
-        time.sleep(3)
+        time.sleep(2)
         
-        # Take screenshot - assuming this function exists elsewhere as mentioned
+        # Take screenshot - calling your existing function
         screenshot_path, screenshot_url = take_screenshot(user_id)
         
         if not screenshot_path:
@@ -774,16 +917,17 @@ def process_browser_tab(request):
                 "message": "Failed to take screenshot"
             }, status=500)
         
-        # Send to omniparser - assuming this function exists elsewhere as mentioned
+        # Send to omniparser - calling your existing function
         omniparser_response = send_to_omniparser(screenshot_path)
         
         return JsonResponse({
             "status": "success",
-            "message": "Screenshot captured based on screen",
+            "message": "Screenshot captured successfully",
             "screenshot": screenshot_url,
             "omniparser_data": omniparser_response
         })
     except Exception as e:
+        logger.error(f"Error in process_browser_tab: {e}", exc_info=True)
         return JsonResponse({
             "status": "error",
             "message": str(e)
