@@ -16,7 +16,6 @@ from ctypes import wintypes
 
 
 
-
 def take_screenshot(user_id, context=""):
     """Capture a screenshot on the local machine"""
     try:
