@@ -22,7 +22,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from .browser_manager import open_browser, update_window_title
-from .screenshot_manager import take_screenshot
+from .screenshot_manager import take_screenshot, Run_test_screenshot
 from .omniparser_client import send_to_omniparser
 from .ui_action import perform_ui_action, Execute_ui_action
 from .session_manager import user_sessions
@@ -253,14 +253,15 @@ def Execute_command(request):
                 if open_browser(user_id, url):
                     print("[INFO] Browser successfully opened")
                     # Wait additional time for page to load
-                    time.sleep(2)
+
+                    time.sleep(1)
 
                     if user_id in user_sessions and 'current_window' in user_sessions[user_id]:
                         current_window_key = user_sessions[user_id]['current_window']
                         print(f"[DEBUG] After browser open - current window key: {current_window_key}")
                         update_window_title(user_id, current_window_key)
 
-                    screenshot_path, screenshot_url = take_screenshot(user_id, url, minimize_after=is_final_step)
+                    screenshot_path, screenshot_url = Run_test_screenshot(user_id, url, minimize_after=is_final_step)
                     print(f"[DEBUG] After screenshot - is_final_step: {is_final_step}, minimizing: {is_final_step}")
 
                     # Get active window details for debugging
@@ -395,6 +396,7 @@ def Execute_command(request):
         traceback.print_exc()
         return JsonResponse({"error": f"Internal server error: {str(e)}"}, status=500)
 
+@csrf_exempt
 def execute_test_case(request):
     """
     Execute a batch of test steps without minimizing the browser between steps
