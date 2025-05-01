@@ -230,6 +230,7 @@ def activate_window(window_info):
     hwnd = window_info.get('hwnd')
     pid = window_info.get('pid')
     window_obj = window_info.get('window')
+    is_maximized = window_info.get('isMaximized', False)
 
     print(f"[INFO] Attempting to activate window: {title}, PID: {pid}, Handle: {hwnd}")
 
@@ -255,24 +256,22 @@ def activate_window(window_info):
 
                 try:
                     # Step 1: Change window state to reset any fullscreen/maximized states
-                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                    time.sleep(0.2)
-
-                    # Step 2: Give window focus using multiple methods
                     user32.BringWindowToTop(hwnd)
                     result = user32.SetForegroundWindow(hwnd)
                     user32.SetActiveWindow(hwnd)
                     user32.SetFocus(hwnd)
 
-                    # Step 3: If needed, use the LockSetForegroundWindow override
                     if not result:
-                        user32.LockSetForegroundWindow(0)  # 0 = LSFW_UNLOCK
-                        user32.SetForegroundWindow(hwnd)
-
-                    # Step 4: Handle maximized state if it was maximized
-                    if window_info.get('isMaximized'):
-                        time.sleep(0.2)
-                        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+                        print("[INFO] Direct focus failed, trying state change...")
+                        # If it was maximized, preserve that state
+                        if is_maximized:
+                            # Just set foreground without changing state
+                            user32.SetForegroundWindow(hwnd)
+                        else:
+                            # For non-maximized windows, we can try restore
+                            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                            time.sleep(0.2)
+                            user32.SetForegroundWindow(hwnd)
 
                     # Verify success
                     time.sleep(0.5)
@@ -283,25 +282,31 @@ def activate_window(window_info):
                     else:
                         print(f"[WARN] Direct activation failed. Current={active_hwnd}, Target={hwnd}")
                 finally:
-                    # Always detach threads if attached
                     if attached:
                         user32.AttachThreadInput(curr_thread, fore_thread, False)
                         print("[INFO] Detached thread input")
 
-                # Fallback: Try minimize-restore cycle only for the target window
-                print("[INFO] Trying minimize-restore cycle...")
-                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-                time.sleep(0.5)
-                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                time.sleep(0.3)
-                win32gui.SetForegroundWindow(hwnd)
-                time.sleep(0.2)
+                if not user32.GetForegroundWindow() == hwnd:
+                    print("[INFO] Trying minimize-restore cycle as last resort...")
+                    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                    time.sleep(0.5)
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                    time.sleep(0.3)
 
-                # Check if window is now active
-                active_hwnd = user32.GetForegroundWindow()
-                if active_hwnd == hwnd:
-                    print(f"[INFO] Successfully activated window using minimize-restore: {title}")
-                    return True
+                    # If it was maximized, maximize it again
+                    if is_maximized:
+                        time.sleep(0.2)
+                        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+
+                    win32gui.SetForegroundWindow(hwnd)
+                    time.sleep(0.2)
+
+                    # Check if window is now active
+                    active_hwnd = user32.GetForegroundWindow()
+                    if active_hwnd == hwnd:
+                        print(f"[INFO] Successfully activated window using minimize-restore: {title}")
+                        return True
+
 
             except Exception as e:
                 print(f"[ERROR] Failed to activate with hwnd: {e}")

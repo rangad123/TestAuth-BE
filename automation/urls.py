@@ -5,7 +5,7 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('handle_command/', views.handle_command, name='handle_command'),
-    path('Execute_command/', views.Execute_command, name='Execute_command'),
+    path('execute_test_case/', views.Execute_command, name='Execute_command'),
     path('run_testsuite/', views.run_testsuite, name='run_testsuite'),
     path('wait/', views.wait, name='wait'),
     path('insert_screen/', views.insert_screen, name='insert_screen'),

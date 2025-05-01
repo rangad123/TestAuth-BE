@@ -228,6 +228,11 @@ def Execute_command(request):
         type_text = data.get("text")
         user_id = data.get("user_id")
 
+        is_final_step = data.get("is_final_step", False)
+
+        # Print the is_final_step value for debugging
+        print(f"[DEBUG] is_final_step: {is_final_step}")
+
         # Validate required parameters
         if not command:
             return JsonResponse({"error": "No command provided"}, status=400)
@@ -235,6 +240,7 @@ def Execute_command(request):
             return JsonResponse({"error": "No user_id provided"}, status=400)
 
         print(f"[INFO] Received command: {command} from user: {user_id}")
+        print(f"[INFO] Is final step: {is_final_step}")
 
         # Handling "open" command
         if command.startswith("open "):
@@ -247,15 +253,15 @@ def Execute_command(request):
                 if open_browser(user_id, url):
                     print("[INFO] Browser successfully opened")
                     # Wait additional time for page to load
-                    time.sleep(5)
+                    time.sleep(2)
 
                     if user_id in user_sessions and 'current_window' in user_sessions[user_id]:
                         current_window_key = user_sessions[user_id]['current_window']
                         print(f"[DEBUG] After browser open - current window key: {current_window_key}")
                         update_window_title(user_id, current_window_key)
 
-                    # Take screenshot
-                    screenshot_path, screenshot_url = take_screenshot(user_id, url)
+                    screenshot_path, screenshot_url = take_screenshot(user_id, url, minimize_after=is_final_step)
+                    print(f"[DEBUG] After screenshot - is_final_step: {is_final_step}, minimizing: {is_final_step}")
 
                     # Get active window details for debugging
                     active_window_title = "Unknown"
@@ -267,7 +273,6 @@ def Execute_command(request):
                         pass
 
                     if screenshot_path:
-
                         # List all chrome windows for debugging
                         chrome_windows = [w['title'] for w in get_chrome_windows()]
 
@@ -303,7 +308,7 @@ def Execute_command(request):
             if not element_name:
                 return JsonResponse({"error": "No element specified for clicking"}, status=400)
 
-            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, "", is_final_step)
             return JsonResponse(action_response)
 
         # Handling "type" and "enter" commands
@@ -325,7 +330,8 @@ def Execute_command(request):
             if not element_name:
                 return JsonResponse({"error": "No target element specified for typing"}, status=400)
 
-            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, type_text)
+            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, type_text,
+                                                is_final_step)
             return JsonResponse(action_response, safe=False)
 
         # Handling "verify" command
@@ -338,9 +344,8 @@ def Execute_command(request):
             if not element_name:
                 return JsonResponse({"error": "No element specified for verify"}, status=400)
 
-            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, "", is_final_step)
             return JsonResponse(action_response)
-
 
         # Handling "get" command
         elif command.startswith("get "):
@@ -354,31 +359,31 @@ def Execute_command(request):
             if not element_name.strip():
                 return JsonResponse({"error": "No element specified for get"}, status=400)
 
-            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, "", is_final_step)
             return JsonResponse(action_response)
-        
+
         elif command.startswith("scroll_up "):
             parts = command.split(" ", 1)
-            
+
             action = parts[0]
             element_name = parts[1]  # You can still receive a label for UI location
 
             if not element_name.strip():
                 return JsonResponse({"error": "No element specified for get"}, status=400)
 
-            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, "", is_final_step)
             return JsonResponse(action_response)
 
         elif command.startswith("scroll_down "):
             parts = command.split(" ", 1)
-            
+
             action = parts[0]
             element_name = parts[1]  # You can still receive a label for UI location
 
             if not element_name.strip():
                 return JsonResponse({"error": "No element specified for get"}, status=400)
 
-            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, "")
+            action_response = Execute_ui_action(user_id, action, element_name, click_X, click_Y, "", is_final_step)
             return JsonResponse(action_response)
 
         return JsonResponse({"error": "Unknown command"}, status=400)
@@ -390,6 +395,44 @@ def Execute_command(request):
         traceback.print_exc()
         return JsonResponse({"error": f"Internal server error: {str(e)}"}, status=500)
 
+def execute_test_case(request):
+    """
+    Execute a batch of test steps without minimizing the browser between steps
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "Invalid request method"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        command = data.get("command")
+        click_X = data.get("click_x")
+        click_Y = data.get("click_y")
+        type_text = data.get("text")
+        user_id = data.get("user_id")
+        is_final_step = data.get("is_final_step", False)
+
+        step_request = type('StepRequest', (), {})()
+        step_request.method = "POST"
+        step_request.body = json.dumps({
+            "command": command,
+            "click_x": click_X,
+            "click_y": click_Y,
+            "text": type_text,
+            "user_id": user_id,
+            "is_final_step": is_final_step
+        })
+
+        response = Execute_command(step_request)
+
+        # Return the response directly
+        return response
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON format"}, status=400)
+    except Exception as e:
+        print(f"[ERROR] Unexpected error in test case execution: {e}")
+        traceback.print_exc()
+        return JsonResponse({"error": f"Internal server error: {str(e)}"}, status=500)
 
 
 import time

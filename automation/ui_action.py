@@ -224,14 +224,26 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
 
 #Test Execution runtime
 
-def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
-    """Performs UI actions directly on the local machine with enhanced window activation"""
+def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text, is_final_step=False):
+    """
+    Performs UI actions directly on the local machine with enhanced window activation
+
+    Parameters:
+        user_id (str): The ID of the user
+        action (str): The action to perform (click, type, etc.)
+        element_name (str): The name of the element to interact with
+        click_X (int): The X-coordinate to click
+        click_Y (int): The Y-coordinate to click
+        text (str): The text to type (if applicable)
+        is_final_step (bool): Whether this is the final step in a test sequence
+    """
     # Debugging Logs
     print("=" * 50)
     print(f"[DEBUG] Action Requested: {action}")
     print(f"[DEBUG] User ID: {user_id}")
     print(f"[DEBUG] Element Name: {element_name}")
     print(f"[DEBUG] Click Coordinates: ({click_X}, {click_Y})")
+    print(f"[DEBUG] Is Final Step: {is_final_step}")
     print("=" * 50)
 
     # Ensure foreground lock timeout is disabled
@@ -300,7 +312,6 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
             except Exception as e1:
                 print(f"[WARN] Standard click failed: {e1}")
 
-
         elif action in ['type', 'enter']:
             # Try different clicking methods
             try:
@@ -311,7 +322,6 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
             except Exception as e1:
                 print(f"[WARN] Standard type failed: {e1}")
 
-
         elif action == 'scroll_up':
             try:
                 pyautogui.scroll(500)
@@ -319,7 +329,6 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 print("[INFO] Scrolled Up success")
             except:
                 print("[warn] Scroll_up failed")
-
 
         elif action == 'scroll_down':
             try:
@@ -329,10 +338,8 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
             except:
                 print("[Warn] Scrolled Down failed")
 
-
-        elif action == 'verify': 
+        elif action == 'verify':
             try:
-
                 word_count = len(element_name.split())
                 click_type = 3 if word_count > 1 else 2
 
@@ -363,10 +370,8 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
             except:
                 print(f"[warn] verify command failed")
 
-
         elif action == 'get':
             try:
-
                 word_count = len(element_name.split())
                 click_type = 3 if word_count > 1 else 2
 
@@ -376,7 +381,6 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 time.sleep(0.5)
                 copied_text = pyperclip.paste().strip()
 
-
                 # Wait longer for any UI updates
                 time.sleep(3)
 
@@ -384,9 +388,9 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 print("[DEBUG] Updating window title after UI action")
                 update_window_title(user_id)
 
-                # Take screenshot and get coordinates
-                screenshot_path, screenshot_url = take_screenshot(user_id, action)
-
+                # Take screenshot and get coordinates - only minimize on final step
+                screenshot_path, screenshot_url = take_screenshot(user_id, action, minimize_after=is_final_step)
+                print(f"[DEBUG] After screenshot - minimize_after was: {is_final_step}")
                 return {
                     "status": "success",
                     "copied_text": copied_text,
@@ -398,7 +402,6 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
                     "message": f"Get command failed: {e}"
                 }
 
-
         else:
             return {"error": "Invalid action"}
 
@@ -409,8 +412,8 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
         print("[DEBUG] Updating window title after UI action")
         update_window_title(user_id)
 
-        # Take screenshot after action
-        screenshot_path, screenshot_url = take_screenshot(user_id, action)
+        # Take screenshot after action - only minimize on final step
+        screenshot_path, screenshot_url = take_screenshot(user_id, action, minimize_after=is_final_step)
 
         if screenshot_path:
             return {
