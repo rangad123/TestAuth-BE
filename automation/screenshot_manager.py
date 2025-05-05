@@ -7,6 +7,7 @@ from .session_manager import user_sessions
 import pygetwindow as gw
 import traceback
 import win32gui
+import win32gui
 import win32con
 import win32api
 import win32process
@@ -35,7 +36,7 @@ def take_screenshot(user_id, context=""):
         screenshot.save(screenshot_path)
 
         time.sleep(2)
-        
+
         if not os.path.exists(screenshot_path):
             raise FileNotFoundError("Screenshot not saved!")
 
@@ -140,3 +141,5 @@ def Run_test_screenshot(user_id, context="", minimize_after=False):
         print(f"[ERROR] Failed to take screenshot: {e}")
         traceback.print_exc()
         return None, None
+
+
