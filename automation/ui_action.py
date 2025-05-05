@@ -14,7 +14,8 @@ from django.conf import settings
 from .session_manager import user_sessions
 from .omniparser_client import send_to_omniparser
 from .screenshot_manager import take_screenshot, Run_test_screenshot
-from .window_utils import disable_focus_stealing_prevention, activate_user_window, update_window_title, Run_test_activate_user_window
+from .window_utils import disable_focus_stealing_prevention, activate_user_window, update_window_title, \
+    Run_test_activate_user_window
 
 
 def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
@@ -102,7 +103,7 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 print(f"[INFO] Typed '{text}' at position ({click_X}, {click_Y})")
             except Exception as e1:
                 print(f"[WARN] Standard type failed: {e1}")
-            
+
 
         elif action == 'scroll_up':
             try:
@@ -122,7 +123,7 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 print("[Warn] Scrolled Down failed")
 
 
-        elif action == 'verify': 
+        elif action == 'verify':
             try:
 
                 word_count = len(element_name.split())
@@ -167,7 +168,6 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
                 pyautogui.hotkey('ctrl', 'c')
                 time.sleep(0.5)
                 copied_text = pyperclip.paste().strip()
-
 
                 # Wait longer for any UI updates
                 time.sleep(3)
@@ -221,8 +221,7 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
         return {"error": f"Action failed: {str(e)}"}
 
 
-
-#Test Execution runtime
+# Test Execution runtime
 
 # def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text):
 #     """Performs UI actions directly on the local machine with enhanced window activation"""
@@ -330,7 +329,7 @@ def perform_ui_action(user_id, action, element_name, click_X, click_Y, text):
 #                 print("[Warn] Scrolled Down failed")
 
 
-#         elif action == 'verify': 
+#         elif action == 'verify':
 #             try:
 
 #                 word_count = len(element_name.split())
@@ -591,7 +590,6 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text, is_
                 update_window_title(user_id)
 
                 # Take screenshot and get coordinates - only minimize on final step
-
                 screenshot_path, screenshot_url = Run_test_screenshot(user_id, action, minimize_after=is_final_step)
 
                 print(f"[DEBUG] After screenshot - minimize_after was: {is_final_step}")
@@ -617,7 +615,6 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text, is_
         update_window_title(user_id)
 
         # Take screenshot after action - only minimize on final step
-
         screenshot_path, screenshot_url = Run_test_screenshot(user_id, action, minimize_after=is_final_step)
 
         if screenshot_path:
