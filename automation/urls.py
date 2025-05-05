@@ -12,9 +12,6 @@ urlpatterns = [
     path('get_browser_tabs/', views.get_browser_tabs, name='get_browser_tabs'),
     path('process_browser_tab/', views.process_browser_tab, name='process_browser_tab'),
 
-
-
-
     
 
     #re_path(r'^react_app/.*$', views.react_app, name='react_app'),
