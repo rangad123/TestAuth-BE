@@ -3,12 +3,13 @@ import re
 import traceback
 import replicate
 import sys
-import base64
 import os
 import time
 import numpy as np
 from django.http import JsonResponse
 from django.conf import settings
+from django.urls import reverse
+from django.contrib.sites.shortcuts import get_current_site
 
      
 REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN", "")
@@ -38,21 +39,6 @@ def convert_numpy_types(obj):
         return tuple(convert_numpy_types(item) for item in obj)
     else:
         return obj
-
-
-
-def encode_image_to_base64(image_path):
-    """
-    Convert an image file to base64 encoded string
-    """
-    try:
-        with open(image_path, "rb") as image_file:
-            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-            return encoded_string
-    except Exception as e:
-        print(f"Error encoding image {image_path}: {str(e)}")
-        return None
-   
 
 def detect_browser_ui(img):
     """
@@ -135,6 +121,14 @@ def detect_browser_ui(img):
     
     return top_offset, bottom_offset
 
+def get_image_url(image_path):
+    """
+    Convert an image file path to a URL that can be accessed from the frontend.
+    This simply returns the media URL path for the image file.
+    """
+    # Just return the media URL with the basename of the image
+    return f"{settings.MEDIA_URL}{os.path.basename(image_path)}"
+
 def send_to_omniparser(screenshot_path):
     if not REPLICATE_API_TOKEN:
         print("Missing Replicate API Token")
@@ -163,18 +157,19 @@ def send_to_omniparser(screenshot_path):
         bottom_cutoff = original_height - bottom_offset
         cv2.line(annotated_img, (0, bottom_cutoff), (original_width, bottom_cutoff), (0, 0, 255), 2)
         
-        annotated_path = os.path.join(settings.BASE_DIR, "detected_browser_ui.jpg")
+        annotated_path = os.path.join(settings.MEDIA_ROOT, "detected_browser_ui.jpg")
         cv2.imwrite(annotated_path, annotated_img, [cv2.IMWRITE_JPEG_QUALITY, 95])
         print(f"[INFO] Annotated image saved to: {annotated_path}")
         
         # Crop the image to remove browser UI
+        cropped_path = None
         if top_offset > 0 or bottom_offset > 0:
             # Calculate the new crop boundaries
             end_y = original_height - bottom_offset if bottom_offset > 0 else original_height
             img = img[top_offset:end_y, :, :]
             
             # Save the cropped image with a new name for verification
-            cropped_path = os.path.join(settings.BASE_DIR, "cropped_content_only.jpg")
+            cropped_path = os.path.join(settings.MEDIA_ROOT, "cropped_content_only.jpg")
             cv2.imwrite(cropped_path, img, [cv2.IMWRITE_JPEG_QUALITY, 95])
             print(f"[INFO] Browser UI removed. Cropped image saved to: {cropped_path}")
             print(f"[INFO] Cropped dimensions: {img.shape[1]}x{img.shape[0]}")
@@ -198,7 +193,7 @@ def send_to_omniparser(screenshot_path):
         enhanced_img = cv2.convertScaleAbs(enhanced_img, alpha=alpha, beta=beta)
         
         # Save the enhanced image
-        resized_path = os.path.join(settings.BASE_DIR, "enhanced_for_parsing.jpg")
+        resized_path = os.path.join(settings.MEDIA_ROOT, "enhanced_for_parsing.jpg")
         cv2.imwrite(resized_path, enhanced_img, [cv2.IMWRITE_JPEG_QUALITY, 95])
         
         # Calculate scale factors to map back to original screen coordinates
@@ -294,27 +289,24 @@ def send_to_omniparser(screenshot_path):
             elements.append(element)
             
         # Save visualization image
-        viz_path = os.path.join(settings.BASE_DIR, "element_detection_viz.jpg")
+        viz_path = os.path.join(settings.MEDIA_ROOT, "element_detection_viz.jpg")
         cv2.imwrite(viz_path, visualization_img, [cv2.IMWRITE_JPEG_QUALITY, 95])
         print(f"[INFO] Element detection visualization saved to: {viz_path}")
         
-        # Prepare debug images for frontend
+        # Prepare image URLs for frontend
         debug_images = {}
-        try:
-            # Original image with UI detection annotations
-            debug_images["detected_browser_ui"] = encode_image_to_base64(annotated_path)
+        
+        # Generate URLs for the images
+        debug_images["detected_browser_ui"] = get_image_url(annotated_path)
+        
+        # Only include cropped_content_only if it was created
+        if cropped_path:
+            debug_images["cropped_content_only"] = get_image_url(cropped_path)
+        else:
+            debug_images["cropped_content_only"] = None
             
-            # Cropped image with UI removed
-            debug_images["cropped_content_only"] = encode_image_to_base64(cropped_path) if top_offset > 0 or bottom_offset > 0 else None
-            
-            # Enhanced image sent to omniparser
-            debug_images["enhanced_for_parsing"] = encode_image_to_base64(resized_path)
-            
-            # Visualization of detected elements
-            debug_images["element_detection_viz"] = encode_image_to_base64(viz_path)
-        except Exception as e:
-            print(f"[WARNING] Error encoding debug images: {str(e)}")
-            debug_images["error"] = str(e)
+        debug_images["enhanced_for_parsing"] = get_image_url(resized_path)
+        debug_images["element_detection_viz"] = get_image_url(viz_path)
 
         # Convert NumPy types before returning the result
         try:
