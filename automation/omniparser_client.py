@@ -135,6 +135,8 @@ def send_to_omniparser(screenshot_path):
         return None
 
     try:
+        #Time_stamp for the debug image
+        timestamp = int(time.time())
         # Read original image
         img = cv2.imread(screenshot_path)
 
@@ -157,7 +159,7 @@ def send_to_omniparser(screenshot_path):
         bottom_cutoff = original_height - bottom_offset
         cv2.line(annotated_img, (0, bottom_cutoff), (original_width, bottom_cutoff), (0, 0, 255), 2)
         
-        annotated_path = os.path.join(settings.MEDIA_ROOT, "detected_browser_ui.jpg")
+        annotated_path = os.path.join(settings.MEDIA_ROOT, f"detected_browser_ui_{timestamp}.jpg")
         cv2.imwrite(annotated_path, annotated_img, [cv2.IMWRITE_JPEG_QUALITY, 95])
         print(f"[INFO] Annotated image saved to: {annotated_path}")
         
@@ -169,7 +171,7 @@ def send_to_omniparser(screenshot_path):
             img = img[top_offset:end_y, :, :]
             
             # Save the cropped image with a new name for verification
-            cropped_path = os.path.join(settings.MEDIA_ROOT, "cropped_content_only.jpg")
+            cropped_path = os.path.join(settings.MEDIA_ROOT, f"cropped_content_only_{timestamp}.jpg")
             cv2.imwrite(cropped_path, img, [cv2.IMWRITE_JPEG_QUALITY, 95])
             print(f"[INFO] Browser UI removed. Cropped image saved to: {cropped_path}")
             print(f"[INFO] Cropped dimensions: {img.shape[1]}x{img.shape[0]}")
@@ -193,7 +195,7 @@ def send_to_omniparser(screenshot_path):
         enhanced_img = cv2.convertScaleAbs(enhanced_img, alpha=alpha, beta=beta)
         
         # Save the enhanced image
-        resized_path = os.path.join(settings.MEDIA_ROOT, "enhanced_for_parsing.jpg")
+        resized_path = os.path.join(settings.MEDIA_ROOT, f"enhanced_for_parsing_{timestamp}.jpg")
         cv2.imwrite(resized_path, enhanced_img, [cv2.IMWRITE_JPEG_QUALITY, 95])
         
         # Calculate scale factors to map back to original screen coordinates
@@ -289,9 +291,11 @@ def send_to_omniparser(screenshot_path):
             elements.append(element)
             
         # Save visualization image
-        viz_path = os.path.join(settings.MEDIA_ROOT, "element_detection_viz.jpg")
+        viz_path = os.path.join(settings.MEDIA_ROOT, f"element_detection_viz_{timestamp}.jpg")
         cv2.imwrite(viz_path, visualization_img, [cv2.IMWRITE_JPEG_QUALITY, 95])
         print(f"[INFO] Element detection visualization saved to: {viz_path}")
+
+        time.sleep(2)
         
         # Prepare image URLs for frontend
         debug_images = {}
