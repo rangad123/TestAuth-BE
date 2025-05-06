@@ -11,9 +11,15 @@ from django.conf import settings
 from django.urls import reverse
 from django.contrib.sites.shortcuts import get_current_site
 
-     
+
 REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN", "")
 os.environ["REPLICATE_API_TOKEN"] = REPLICATE_API_TOKEN
+
+# Define standard browser UI dimensions for guest mode
+# This is the fixed offset that will be used for all guest mode browser coordinates
+# It represents the typical height of the address bar and tabs in guest mode
+GUEST_MODE_TOP_OFFSET = 120  # Standard height for address bar and tabs in guest mode (without bookmarks)
+# No bookmark bar in guest mode, so we don't define its height
 
 def convert_numpy_types(obj):
     """
@@ -45,7 +51,7 @@ def detect_browser_ui(img):
     Detect browser UI elements in the screenshot including address bar, 
     navigation buttons, bookmarks bar, and bottom taskbar.
     
-    Returns: (top_offset, bottom_offset)
+    Returns: (top_offset, bookmark_bar_height, bottom_offset, has_bookmark_bar)
     """
     height, width, _ = img.shape
     
@@ -53,7 +59,7 @@ def detect_browser_ui(img):
     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
     # Detect top browser chrome (address bar, tabs, etc.)
-    top_offset = 0
+    address_bar_offset = 0
     
     # Check the top 150px for horizontal lines and color changes
     top_region = gray_img[0:min(150, height//3), :]
@@ -61,15 +67,15 @@ def detect_browser_ui(img):
     lines_top = cv2.HoughLinesP(edges_top, 1, np.pi/180, threshold=100, minLineLength=width*0.3, maxLineGap=10)
     
     if lines_top is not None:
-        # Find the lowest horizontal line in the top region
+        # Find the lowest horizontal line in the top region that could be the address bar
         for line in lines_top:
             x1, y1, x2, y2 = line[0]
             # If it's a relatively horizontal line
             if abs(y1 - y2) < 5:
-                top_offset = max(top_offset, y2 + 5)  # Add small padding
+                address_bar_offset = max(address_bar_offset, y2 + 5)  # Add small padding
     
     # If lines detection didn't work well, use color analysis to find large transitions
-    if top_offset < 50:  # Typically browser UI is at least 50px tall
+    if address_bar_offset < 50:  # Typically browser UI is at least 50px tall
         # Analyze horizontal bands for color differences
         for y in range(50, min(150, height//3), 5):
             upper_region = gray_img[y-10:y, :]
@@ -80,11 +86,44 @@ def detect_browser_ui(img):
             
             # If there's a significant color change, it might be where the web content begins
             if abs(upper_mean - lower_mean) > 20:
-                top_offset = max(top_offset, y + 5)
+                address_bar_offset = max(address_bar_offset, y + 5)
     
     # If still no clear detection, use a safe default based on common browser UIs
-    if top_offset < 80:
-        top_offset = 80  # Default estimate for browser UI height
+    if address_bar_offset < 70:
+        address_bar_offset = 70  # Default estimate for browser UI height without bookmarks
+    
+    # Now detect if there's a bookmarks bar below the address bar
+    bookmark_bar_height = 0
+    has_bookmark_bar = False
+    
+    # Look for another horizontal line or color transition below the address bar
+    bookmark_area_start = address_bar_offset
+    bookmark_area_end = min(address_bar_offset + 50, height//2)  # Look up to 50px below address bar
+    
+    # Extract bookmark bar region for analysis
+    bookmark_region = gray_img[bookmark_area_start:bookmark_area_end, :]
+    edges_bookmark = cv2.Canny(bookmark_region, 50, 150)
+    lines_bookmark = cv2.HoughLinesP(edges_bookmark, 1, np.pi/180, threshold=100, minLineLength=width*0.3, maxLineGap=10)
+    
+    bookmark_offset = 0
+    if lines_bookmark is not None:
+        for line in lines_bookmark:
+            x1, y1, x2, y2 = line[0]
+            # Adjust y-coordinates to account for the region offset
+            y1 += bookmark_area_start
+            y2 += bookmark_area_start
+            
+            # If it's a relatively horizontal line and different from address bar line
+            if abs(y1 - y2) < 5 and y1 > address_bar_offset + 10:
+                bookmark_offset = max(bookmark_offset, y2 + 5)
+    
+    # If we found a reasonable bookmark bar
+    if bookmark_offset > address_bar_offset + 15:
+        bookmark_bar_height = bookmark_offset - address_bar_offset
+        has_bookmark_bar = True
+        top_offset = bookmark_offset  # Total top offset includes both address bar and bookmarks
+    else:
+        top_offset = address_bar_offset  # No bookmarks bar detected
     
     # Detect bottom taskbar (for Windows)
     bottom_offset = 0
@@ -116,10 +155,12 @@ def detect_browser_ui(img):
     
     # Print detection results
     print(f"[INFO] Browser UI detection results:")
-    print(f"       - Top UI detected: {top_offset}px")
+    print(f"       - Address bar height: {address_bar_offset}px")
+    print(f"       - Bookmarks bar: {'Yes' if has_bookmark_bar else 'No'}, height: {bookmark_bar_height}px")
+    print(f"       - Total top UI detected: {top_offset}px")
     print(f"       - Bottom UI detected: {bottom_offset}px")
     
-    return top_offset, bottom_offset
+    return top_offset, bookmark_bar_height, bottom_offset, has_bookmark_bar
 
 def get_image_url(image_path):
     """
@@ -148,13 +189,19 @@ def send_to_omniparser(screenshot_path):
         print(f"[INFO] Image Loaded: {screenshot_path}")
         print(f"[INFO] Original Image Dimensions: {original_width}x{original_height}")
         
-        # Detect browser UI elements (top and bottom)
-        top_offset, bottom_offset = detect_browser_ui(img)
+        # Detect browser UI elements (top, bookmarks bar, and bottom)
+        top_offset, bookmark_bar_height, bottom_offset, has_bookmark_bar = detect_browser_ui(img)
         
         # Save original image with annotations for verification
         annotated_img = img.copy()
-        # Draw red line at top_offset
+        # Draw red line at top_offset (which includes both address bar and bookmarks if present)
         cv2.line(annotated_img, (0, top_offset), (original_width, top_offset), (0, 0, 255), 2)
+        
+        # If bookmarks were detected, mark the address bar boundary with a yellow line
+        if has_bookmark_bar and bookmark_bar_height > 0:
+            address_bar_boundary = top_offset - bookmark_bar_height
+            cv2.line(annotated_img, (0, address_bar_boundary), (original_width, address_bar_boundary), (0, 255, 255), 2)
+        
         # Draw red line at bottom cutoff
         bottom_cutoff = original_height - bottom_offset
         cv2.line(annotated_img, (0, bottom_cutoff), (original_width, bottom_cutoff), (0, 0, 255), 2)
@@ -244,6 +291,15 @@ def send_to_omniparser(screenshot_path):
             'link': (255, 255, 0),  # Yellow for links
             'default': (255, 0, 255) # Magenta for other elements
         }
+        
+        # Always use fixed guest mode offset for consistency
+        guest_mode_top_offset = GUEST_MODE_TOP_OFFSET  # Fixed height for address bar in guest mode
+        
+        # Print adjustment info
+        print(f"[INFO] Coordinate mapping for guest mode:")
+        print(f"       - User detected top UI height: {top_offset}px")
+        print(f"       - User has bookmark bar: {'Yes' if has_bookmark_bar else 'No'}")
+        print(f"       - Guest mode fixed top UI height: {guest_mode_top_offset}px")
 
         for match in matches:
             i = int(match[0])
@@ -266,25 +322,45 @@ def send_to_omniparser(screenshot_path):
             cv2.putText(visualization_img, label, (pt1[0], pt1[1]-5), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-            # Convert bbox from model space to original screen space
-            # Add the top_offset to the y-coordinates to account for the cropped area
-            abs_coords = [
+            # The model detected elements in the cropped image (without browser UI)
+            # First convert the element coordinates to original screenshot scale
+            content_coords = [
                 int(bbox[0] * TARGET_WIDTH * scale_x),
-                int(bbox[1] * TARGET_HEIGHT * scale_y) + top_offset,
+                int(bbox[1] * TARGET_HEIGHT * scale_y),
                 int(bbox[2] * TARGET_WIDTH * scale_x),
-                int(bbox[3] * TARGET_HEIGHT * scale_y) + top_offset
+                int(bbox[3] * TARGET_HEIGHT * scale_y)
+            ]
+            
+            # User screen coordinates - how they appeared in the user's original screenshot
+            # Add back the original top offset that was cropped
+            user_screen_coords = [
+                content_coords[0],
+                content_coords[1] + top_offset,
+                content_coords[2],
+                content_coords[3] + top_offset
+            ]
+            
+            # FIXED: Guest mode coordinates - adjust properly for guest mode
+            # This is the key change: we need to map content coordinates to guest mode
+            # without applying the user's browser UI offset first
+            guest_mode_coords = [
+                content_coords[0],
+                content_coords[1] + guest_mode_top_offset,  # Direct mapping to guest mode
+                content_coords[2],
+                content_coords[3] + guest_mode_top_offset   # Direct mapping to guest mode
             ]
 
-            # Calculate center point for clicking
-            center_x = (abs_coords[0] + abs_coords[2]) // 2
-            center_y = (abs_coords[1] + abs_coords[3]) // 2
+            # Calculate center point for clicking (using guest mode coordinates)
+            center_x = (guest_mode_coords[0] + guest_mode_coords[2]) // 2
+            center_y = (guest_mode_coords[1] + guest_mode_coords[3]) // 2
 
             element = {
                 "id": i,
                 "name": content,
                 "type": element_type,
                 "interactivity": interactivity,
-                "coordinates": abs_coords,
+                "user_screen_coordinates": user_screen_coords,
+                "guest_mode_coordinates": guest_mode_coords,
                 "click_point": (center_x, center_y)
             }
 
@@ -312,6 +388,38 @@ def send_to_omniparser(screenshot_path):
         debug_images["enhanced_for_parsing"] = get_image_url(resized_path)
         debug_images["element_detection_viz"] = get_image_url(viz_path)
 
+        # Create a visualization of coordinate mapping
+        # Use the original image to show both user and guest mode coordinates
+        mapping_img = cv2.imread(screenshot_path)
+        
+        # Draw on it to show how coordinates are mapped
+        for element in elements:
+            # Draw original user coordinates in red
+            user_x = element["user_screen_coordinates"][0]
+            user_y = element["user_screen_coordinates"][1]
+            user_x2 = element["user_screen_coordinates"][2]
+            user_y2 = element["user_screen_coordinates"][3]
+            
+            # Draw rectangle for user coords (red)
+            cv2.rectangle(mapping_img, (user_x, user_y), (user_x2, user_y2), (0, 0, 255), 2)
+            
+            # Draw guest mode coordinates in green
+            guest_x = element["guest_mode_coordinates"][0]
+            guest_y = element["guest_mode_coordinates"][1]
+            guest_x2 = element["guest_mode_coordinates"][2]
+            guest_y2 = element["guest_mode_coordinates"][3]
+            
+            # Draw rectangle for guest coords (green)
+            cv2.rectangle(mapping_img, (guest_x, guest_y), (guest_x2, guest_y2), (0, 255, 0), 2)
+            
+            # Draw click points
+            cv2.circle(mapping_img, element["click_point"], 5, (255, 255, 0), -1)  # Yellow circle for click point
+            
+        # Save mapping visualization
+        mapping_path = os.path.join(settings.MEDIA_ROOT, f"coordinate_mapping_viz_{timestamp}.jpg")
+        cv2.imwrite(mapping_path, mapping_img, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        debug_images["coordinate_mapping_viz"] = get_image_url(mapping_path)
+
         # Convert NumPy types before returning the result
         try:
             result = {
@@ -320,8 +428,11 @@ def send_to_omniparser(screenshot_path):
                 "interactive_elements": sum(1 for e in elements if e["interactivity"]),
                 "response_time": response_time,
                 "browser_ui_detected": {
-                    "top_offset": top_offset,
-                    "bottom_offset": bottom_offset
+                    "user_top_offset": top_offset,
+                    "has_bookmark_bar": has_bookmark_bar,
+                    "bookmark_bar_height": bookmark_bar_height,
+                    "bottom_offset": bottom_offset,
+                    "guest_mode_offset": guest_mode_top_offset
                 },
                 "debug_images": debug_images
             }

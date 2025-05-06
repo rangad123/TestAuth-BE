@@ -29,7 +29,7 @@ def take_screenshot(user_id, context=""):
             user_sessions[user_id] = {'last_active': time.time(), 'windows': {}}
 
         # Wait briefly to ensure UI is stable
-        time.sleep(3)
+        time.sleep(5)
 
         # Take screenshot
         screenshot = pyautogui.screenshot()
@@ -85,7 +85,7 @@ def Run_test_screenshot(user_id, context="", minimize_after=False):
             user_sessions[user_id] = {'last_active': time.time(), 'windows': {}}
 
         # Wait briefly to ensure UI is stable
-        time.sleep(3)
+        time.sleep(5)
 
         # Take screenshot
         screenshot = pyautogui.screenshot()

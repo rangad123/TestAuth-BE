@@ -13,7 +13,6 @@ from .session_manager import user_sessions
 from .config import BROWSER_PATH
 
 
-
 if sys.platform == 'win32':
     import win32gui
     import win32con
@@ -61,8 +60,16 @@ def open_browser(user_id, url):
                 BROWSER_PATH,
                 "--new-window",
                 "--start-maximized",
-                "--disable-session-crashed-bubble",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--disable-extensions",
                 "--disable-infobars",
+                "--disable-popup-blocking",
+                "--disable-translate",
+                "--disable-notifications",
+                "--disable-sync",
+                "--disable-component-update",
+                "--guest",
                 url
             ], startupinfo=startupinfo)
         else:
@@ -71,8 +78,16 @@ def open_browser(user_id, url):
                 BROWSER_PATH,
                 "--new-window",
                 "--start-maximized",
-                "--disable-session-crashed-bubble",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--disable-extensions",
                 "--disable-infobars",
+                "--disable-popup-blocking",
+                "--disable-translate",
+                "--disable-notifications",
+                "--disable-sync",
+                "--disable-component-update",
+                "--guest",
                 url
             ])
 
