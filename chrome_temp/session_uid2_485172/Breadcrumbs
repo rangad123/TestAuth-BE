@@ -1,0 +1,84 @@
+0:00:00 Startup
+0:00:00 IncognitoMode_Started
+0:00:00 I Tab1 StartNav1 #auto_toplevel
+0:00:00 I Browser1 Insert active Tab1 at 0
+0:00:00 TouchMode.EnteredNonTouchMode
+0:00:03 I Tab1 FinishNav1
+0:00:04 Memory Pressure: Critical
+0:00:05 I Tab1 PageLoad
+0:00:05 I Tab1 StartNav12 #renderer-script #link
+0:00:05 I Tab1 FinishNav12
+0:00:09 Memory Pressure: Critical
+0:00:14 Memory Pressure: Moderate
+0:00:15 I Browser1 Insert active Tab2 at 1
+0:00:15 I Tab2 StartNav13 #renderer-user #link
+0:00:23 I Tab2 FinishNav13
+0:00:24 Memory Pressure: Moderate
+0:00:25 Widget Closed: StatusBubble
+0:00:26 I Tab2 PageLoad
+0:00:30 TextSelectionChanged
+0:00:30 TextSelectionChanged
+0:00:31 I Tab2 StartNav14 #renderer-user #link
+0:00:31 I Tab2 FinishNav14
+0:00:33 TextSelectionChanged
+0:00:34 TextSelectionChanged
+0:00:35 Memory Pressure: Moderate
+0:00:40 TextSelectionChanged
+0:00:41 TextSelectionChanged
+0:00:41 TextSelectionChanged
+0:00:41 TextSelectionChanged
+0:00:41 TextSelectionChanged
+0:00:41 TextSelectionChanged
+0:00:41 TextSelectionChanged
+0:00:41 TextSelectionChanged
+0:00:41 TextSelectionChanged
+0:00:41 TextSelectionChanged
+0:00:41 TextSelectionChanged
+0:00:41 TextSelectionChanged
+0:00:41 TextSelectionChanged
+0:00:41 TextSelectionChanged
+0:00:41 TextSelectionChanged
+0:00:41 TextSelectionChanged
+0:00:42 Widget Closed: StatusBubble
+0:00:42 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:43 TextSelectionChanged
+0:00:45 Memory Pressure: Moderate
+0:00:45 TextSelectionChanged
+0:00:46 TextSelectionChanged
+0:00:46 TextSelectionChanged
+0:00:46 TextSelectionChanged
+0:00:46 TextSelectionChanged
+0:00:46 TextSelectionChanged
+0:00:46 TextSelectionChanged
+0:00:46 TextSelectionChanged
+0:00:46 TextSelectionChanged
+0:00:46 TextSelectionChanged
+0:00:46 TextSelectionChanged
+0:00:46 TextSelectionChanged
+0:00:46 TextSelectionChanged
+0:00:46 TextSelectionChanged
+0:00:47 TextSelectionChanged
+0:00:55 Memory Pressure: Moderate
+0:00:59 TextSelectionChanged
+0:01:00 TextSelectionChanged
+0:01:00 TextSelectionChanged
+0:01:05 Memory Pressure: Moderate
+0:01:15 Memory Pressure: Moderate
+0:01:16 I Browser1 Closed 2 tabs

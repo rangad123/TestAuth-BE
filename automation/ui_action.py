@@ -298,7 +298,7 @@ def Execute_ui_action(user_id, action, element_name, click_X, click_Y, text, is_
 
     try:
         # Wait to ensure UI is stable - wait longer to ensure window is properly activated
-        # time.sleep(2)
+        #time.sleep(3)
 
         if action == 'click':
             # Try different clicking methods

@@ -1,4 +1,4 @@
-import os 
+import os
 import subprocess
 import time
 import sys
@@ -20,7 +20,7 @@ if sys.platform == 'win32':
     import win32process
     import ctypes
     from ctypes import wintypes
-    
+
 if sys.platform == 'win32':
     user32 = ctypes.windll.user32
 
@@ -92,7 +92,8 @@ def open_browser(user_id, url):
             ])
 
         # Wait longer for Chrome to launch (increased from 5 to 10 seconds)
-        time.sleep(10)
+        # Replace time.sleep(10) with:
+        time.sleep(5)  # Initial shorter wait
 
         # Get new Chrome windows with detailed info
         all_new_windows = get_chrome_windows()

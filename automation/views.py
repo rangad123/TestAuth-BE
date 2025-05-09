@@ -23,7 +23,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from .browser_manager import open_browser, update_window_title
 from .screenshot_manager import take_screenshot, Run_test_screenshot
-from .omniparser_client import send_to_omniparser
+from .omniparser_client import send_to_omniparser, Write_to_omniparser
 from .ui_action import perform_ui_action, Execute_ui_action
 from .session_manager import user_sessions
 from .window_utils import get_chrome_windows
@@ -1069,7 +1069,7 @@ def process_browser_tab(request):
             logger.info(f"Window minimization: {'Success' if minimized else 'Failed'}")
 
         # Send to omniparser - calling your existing function
-        omniparser_response = send_to_omniparser(screenshot_path)
+        omniparser_response = Write_to_omniparser(screenshot_path)
 
         return JsonResponse({
             "status": "success",
