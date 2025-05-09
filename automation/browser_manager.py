@@ -92,7 +92,7 @@ def open_browser(user_id, url):
             ])
 
         # Wait longer for Chrome to launch (increased from 5 to 10 seconds)
-        time.sleep(5)
+        time.sleep(7)
 
         # Get new Chrome windows with detailed info
         all_new_windows = get_chrome_windows()
