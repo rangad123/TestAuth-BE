@@ -25,7 +25,7 @@ def convert_numpy_types(obj):
     if isinstance(obj, (np.integer, np.intc, np.intp, np.int8, np.int16, np.int32, 
                         np.int64, np.uint8, np.uint16, np.uint32, np.uint64)):
         return int(obj)
-    elif isinstance(obj, (np.float16, np.float32, np.float64)):  # Removed np.float_
+    elif isinstance(obj, (np.float16, np.float32, np.float64)):
         return float(obj)
     elif isinstance(obj, (np.bool_)):
         return bool(obj)
@@ -42,162 +42,337 @@ def convert_numpy_types(obj):
 
 def detect_browser_ui(img):
     """
-    Detect browser UI elements in the screenshot including address bar, 
-    navigation buttons, bookmarks bar, and bottom taskbar.
+    Improved browser UI detection that accurately detects bookmarks bars.
+    Returns: top_offset, bookmark_offset, bottom_offset, has_bookmarks
     """
+    import cv2
+    import numpy as np
+    
     height, width, _ = img.shape
     print(f"[INFO] Processing image with dimensions: {width}x{height}")
     
-    # Convert to grayscale for edge detection
+    # Convert to grayscale for analysis
     gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
-    # Detect top browser chrome (address bar, tabs, etc.)
-    top_offset = 0
+    # STEP 1: Detect top browser chrome (address bar, tabs, etc.)
+    # -----------------------------------------------------------
     
-    # Check the top 150px for horizontal lines and color changes
-    top_region = gray_img[0:min(150, height//3), :]
-    edges_top = cv2.Canny(top_region, 50, 150)
+    # Define suitable region for analysis
+    top_region_height = min(150, height//3)
+    top_region = gray_img[0:top_region_height, :]
+    
+    # Use edge detection to find horizontal lines
+    edges_top = cv2.Canny(top_region, 30, 150)
     lines_top = cv2.HoughLinesP(edges_top, 1, np.pi/180, 
-                               threshold=100, 
-                               minLineLength=width*0.3, 
-                               maxLineGap=10)
+                              threshold=100, 
+                              minLineLength=width*0.25, 
+                              maxLineGap=20)
     
+    # Collect horizontal lines
     horizontal_lines = []
     if lines_top is not None:
         for line in lines_top:
             x1, y1, x2, y2 = line[0]
-            if abs(y1 - y2) < 5:  # Horizontal line
+            if abs(y1 - y2) < 5 and abs(x2 - x1) > width * 0.25:  # Significant horizontal line
                 horizontal_lines.append((min(y1, y2), max(y1, y2)))
-                top_offset = max(top_offset, max(y1, y2) + 5)
     
     # Sort horizontal lines by y-position
     horizontal_lines.sort(key=lambda x: x[0])
     
-    # Use color analysis if lines detection didn't work well
-    if top_offset < 50:
-        for y in range(50, min(150, height//3), 5):
-            upper_region = gray_img[y-10:y, :]
-            lower_region = gray_img[y:y+10, :]
-            
-            upper_mean = np.mean(upper_region)
-            lower_mean = np.mean(lower_region)
-            
-            if abs(upper_mean - lower_mean) > 20:
-                top_offset = max(top_offset, y + 5)
+    # Create horizontal projection to identify density of horizontal edges
+    h_projection = np.sum(edges_top, axis=1)
     
-    # Default safe browser UI height if no clear detection
-    if top_offset < 80:
-        top_offset = 80
-        print("[INFO] Using default top offset: 80px")
+    # Find significant changes in horizontal projection
+    significant_changes = []
+    for i in range(1, len(h_projection)-1):
+        if h_projection[i] > max(h_projection[i-1], h_projection[i+1]) * 1.5 and h_projection[i] > width * 0.1:
+            significant_changes.append(i)
     
-    # Improved bookmark detection with stricter criteria
+    # Determine top offset using multiple signals
+    top_offset = 0
+    
+    # Consider horizontal lines if they're significant
+    if horizontal_lines:
+        # Find the last major horizontal line in the top region that's below any UI controls
+        last_significant_line = 0
+        for line_start, line_end in horizontal_lines:
+            if 30 < line_end < top_region_height and line_end > last_significant_line:
+                last_significant_line = line_end
+        
+        if last_significant_line > 0:
+            top_offset = last_significant_line + 5
+    
+    # Consider significant horizontal edge density changes
+    if significant_changes:
+        # Find the last significant change in the top region that could indicate the end of browser UI
+        for change in significant_changes:
+            if 30 < change < top_region_height and change > top_offset - 10:
+                top_offset = max(top_offset, change + 5)
+    
+    # If still not detected well, use a more sophisticated approach based on gradient analysis
+    if top_offset < 30:
+        # Analyze the gradient of intensity changes
+        gradient = np.gradient(np.mean(top_region, axis=1))
+        
+        # Find significant gradient changes
+        gradient_peaks = []
+        for i in range(10, len(gradient)-10):
+            if abs(gradient[i]) > 5 and abs(gradient[i]) > abs(gradient[i-1]) and abs(gradient[i]) > abs(gradient[i+1]):
+                gradient_peaks.append((i, abs(gradient[i])))
+        
+        # Sort by significance
+        gradient_peaks.sort(key=lambda x: x[1], reverse=True)
+        
+        # Use the most significant peak as potential UI boundary
+        if gradient_peaks and gradient_peaks[0][0] > 30:
+            top_offset = max(top_offset, gradient_peaks[0][0] + 5)
+    
+    # Default minimum height for browser chrome if detection is still uncertain
+    if top_offset < 60:
+        top_offset = 75  # Standard minimum height for most browsers
+        print("[INFO] Using default browser chrome height: 75px")
+    
+    # STEP 2: IMPROVED BOOKMARK BAR DETECTION
+    # ---------------------------------------------------
     has_bookmarks = False
     bookmark_offset = 0
-    bookmark_confidence = 0
-    required_confidence = 2  # Increased threshold to avoid false positives
     
-    # Define the region where bookmarks typically appear
+    # Define bookmark detection region just below the detected top chrome
     bookmark_region_start = top_offset
-    bookmark_region_end = min(top_offset + 40, height//2)
-    bookmark_region = gray_img[bookmark_region_start:bookmark_region_end, :]
+    bookmark_region_end = min(top_offset + 50, height//2)
     
-    # 1. Check for bookmark bar indicators
-    top_right_region = bookmark_region[:20, int(width*0.7):]
-    mean_intensity = np.mean(top_right_region)
-    std_intensity = np.std(top_right_region)
-    
-    # Stricter criteria for text detection
-    if std_intensity > 20 and mean_intensity > 30:  # Increased threshold
-        text_ratio = np.sum((top_right_region > mean_intensity + std_intensity) | 
-                           (top_right_region < mean_intensity - std_intensity)) / top_right_region.size
-        if 0.2 < text_ratio < 0.6:  # Text typically has this ratio of light/dark pixels
-            bookmark_confidence += 1
-            print("[INFO] Detected potential bookmark indicator text")
-    
-    # 2. Check for consistent bookmark icon patterns
-    icon_detected = False
-    for y in range(0, bookmark_region.shape[0] - 20, 5):
-        row_std = []
-        for x in range(0, width - 100, 100):  # Check every 100px
-            patch = bookmark_region[y:y+20, x:x+100]
-            row_std.append(np.std(patch))
+    # Only proceed if we have a valid region
+    if bookmark_region_end > bookmark_region_start + 10:
+        bookmark_region = gray_img[bookmark_region_start:bookmark_region_end, :]
         
-        # Look for regular pattern of variations (icons)
-        if len(row_std) > 3:
-            std_of_stds = np.std(row_std)
-            mean_of_stds = np.mean(row_std)
-            if std_of_stds > 5 and mean_of_stds > 15:  # Must have significant and regular variations
-                icon_detected = True
-                bookmark_offset = max(bookmark_offset, y + 20)
-                break
+        # Method 1: Detect horizontal separators
+        edges_bookmark = cv2.Canny(bookmark_region, 30, 100)
+        lines_bookmark = cv2.HoughLinesP(edges_bookmark, 1, np.pi/180, 
+                                       threshold=50, 
+                                       minLineLength=width*0.4, 
+                                       maxLineGap=20)
+        
+        separator_line_y = 0
+        if lines_bookmark is not None:
+            for line in lines_bookmark:
+                x1, y1, x2, y2 = line[0]
+                if abs(y1 - y2) < 3 and abs(x2 - x1) > width * 0.4:
+                    separator_line_y = max(separator_line_y, y1)
+        
+        # Method 2: Improved bookmark pattern detection
+        # Analyze specific regions where bookmarks are typically placed
+        bookmark_evidence = 0
+        
+        # Extract the first ~35 pixels below the browser chrome for analysis
+        # This is where bookmark elements would appear
+        bookmark_candidate_region = bookmark_region[:min(35, bookmark_region.shape[0]), :]
+        
+        # Calculate horizontal variance at regular intervals
+        # Bookmarks should create a pattern of alternating variance
+        column_width = width // 20  # Divide into 20 columns for analysis
+        column_variances = []
+        
+        for i in range(0, width - column_width, column_width):
+            column = bookmark_candidate_region[:, i:i+column_width]
+            variance = np.var(column)
+            column_variances.append(variance)
+        
+        # Calculate variance of these variances
+        # High meta-variance indicates alternating patterns (likely bookmarks)
+        # Low meta-variance suggests uniform content (no bookmarks)
+        if len(column_variances) > 1:
+            meta_variance = np.var(column_variances)
+            avg_variance = np.mean(column_variances)
+            
+            # Check if we have alternating patterns of high and low variance
+            # This is characteristic of bookmark bars
+            if meta_variance > 1000 and avg_variance > 300:
+                bookmark_evidence += 2
+                
+        # Method 3: Analyze color distribution
+        # Bookmark bars often have a distinct color scheme from the main content
+        color_distinctiveness = 0
+        
+        # Compare the bookmark region with content below it
+        content_start = bookmark_region_start + 40  # Skip potential bookmark area
+        content_end = min(content_start + 50, height - 1)
+        
+        if content_end > content_start:
+            content_sample = gray_img[content_start:content_end, :]
+            bookmark_sample = gray_img[bookmark_region_start:bookmark_region_start+30, :]
+            
+            # Compare histograms to detect color scheme differences
+            bookmark_hist = cv2.calcHist([bookmark_sample], [0], None, [64], [0, 256])
+            content_hist = cv2.calcHist([content_sample], [0], None, [64], [0, 256])
+            
+            # Normalize histograms
+            cv2.normalize(bookmark_hist, bookmark_hist, 0, 1, cv2.NORM_MINMAX)
+            cv2.normalize(content_hist, content_hist, 0, 1, cv2.NORM_MINMAX)
+            
+            # Compare histograms
+            hist_diff = cv2.compareHist(bookmark_hist, content_hist, cv2.HISTCMP_CHISQR)
+            
+            # High difference suggests distinct areas (bookmarks vs content)
+            if hist_diff > 0.5:
+                color_distinctiveness = 1
+                bookmark_evidence += 1
+        
+        # Method 4: Analyze horizontal spaced elements (bookmarks)
+        # Look for evenly spaced vertical edges that might represent bookmark boundaries
+        vertical_edges = cv2.Sobel(bookmark_candidate_region, cv2.CV_64F, 1, 0, ksize=3)
+        vertical_edges = cv2.convertScaleAbs(vertical_edges)
+        
+        # Sum vertical edges horizontally to find potential bookmark boundaries
+        vertical_edge_profile = np.sum(vertical_edges, axis=0)
+        
+        # Smooth the profile for cleaner detection
+        kernel_size = width // 50
+        if kernel_size % 2 == 0:
+            kernel_size += 1
+        if kernel_size < 3:
+            kernel_size = 3
+            
+        vertical_edge_profile_smooth = cv2.GaussianBlur(vertical_edge_profile, (kernel_size, 1), 0)
+        
+        # Find peaks in edge profile that might indicate bookmark boundaries
+        peaks = []
+        min_distance = width // 30  # Minimum distance between bookmarks
+        threshold = np.max(vertical_edge_profile_smooth) * 0.4
+        
+        for i in range(1, len(vertical_edge_profile_smooth) - 1):
+            if (vertical_edge_profile_smooth[i] > vertical_edge_profile_smooth[i-1] and
+                vertical_edge_profile_smooth[i] > vertical_edge_profile_smooth[i+1] and
+                vertical_edge_profile_smooth[i] > threshold):
+                # Found a potential bookmark boundary
+                if not peaks or i - peaks[-1] > min_distance:
+                    peaks.append(i)
+        
+        # Bookmarks typically have 4+ evenly spaced boundaries
+        if len(peaks) >= 4:
+            # Calculate distances between consecutive peaks
+            distances = [peaks[i+1] - peaks[i] for i in range(len(peaks)-1)]
+            
+            # Check if distances are somewhat consistent (bookmarks tend to be similar widths)
+            if distances:
+                std_dev = np.std(distances)
+                mean_dist = np.mean(distances)
+                
+                # If standard deviation is less than 40% of mean, they're relatively evenly spaced
+                if std_dev < mean_dist * 0.4:
+                    bookmark_evidence += 2
+        
+        # CRITICAL CHECK: Look for a visible separation line
+        # This is the most reliable indicator of a bookmarks bar
+        if separator_line_y > 5:
+            bookmark_evidence += 3  # Strong evidence
+            bookmark_offset = separator_line_y + 5
+        
+        # Make final determination on bookmarks presence
+        # Require high evidence threshold to avoid false positives
+        has_bookmarks = bookmark_evidence >= 5
+        
+        if has_bookmarks:
+            # Set minimum bookmark height if not determined by a separator line
+            if bookmark_offset == 0:
+                bookmark_offset = 30  # Default bookmark height
+            
+            # Sanity check - bookmark height shouldn't be too large
+            if bookmark_offset > 40:
+                bookmark_offset = 35
+                
+            print(f"[INFO] Bookmarks bar detected with height: {bookmark_offset}px (evidence score: {bookmark_evidence})")
+        else:
+            # Reset if insufficient evidence
+            bookmark_offset = 0
+            print(f"[INFO] No bookmarks bar detected (evidence score: {bookmark_evidence})")
     
-    if icon_detected:
-        bookmark_confidence += 1
-        print("[INFO] Detected bookmark icon pattern")
-    
-    # 3. Check for horizontal separator line
-    edges = cv2.Canny(bookmark_region, 30, 100)
-    lines = cv2.HoughLinesP(edges, 1, np.pi/180, 
-                           threshold=50,
-                           minLineLength=width*0.4,  # Increased length requirement
-                           maxLineGap=20)
-    
-    if lines is not None:
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
-            if abs(y1 - y2) < 3:  # Stricter horizontal line requirement
-                line_length = abs(x2 - x1)
-                if line_length > width * 0.5:  # Must span at least half the width
-                    bookmark_confidence += 1
-                    bookmark_offset = max(bookmark_offset, y1 + 5)
-                    print("[INFO] Detected bookmark separator line")
-                    break
-    
-    # Final decision
-    has_bookmarks = bookmark_confidence >= required_confidence
-    
-    # Ensure minimum bookmark bar height if detected
-    if has_bookmarks:
-        bookmark_offset = max(bookmark_offset, 25)
-    else:
-        bookmark_offset = 0  # Reset if no bookmarks detected
-    
-    # Detect bottom taskbar (for Windows)
+    # STEP 3: Detect bottom taskbar/UI with improved accuracy
+    # ------------------------------------------------------
     bottom_offset = 0
-    bottom_region = gray_img[max(0, height-60):height, :]
-    edges_bottom = cv2.Canny(bottom_region, 50, 150)
-    lines_bottom = cv2.HoughLinesP(edges_bottom, 1, np.pi/180, 
-                                  threshold=100, 
-                                  minLineLength=width*0.3, 
-                                  maxLineGap=10)
     
+    # Define bottom region
+    bottom_region_height = min(70, height//10)
+    bottom_region = gray_img[height-bottom_region_height:height, :]
+    
+    # Method 1: Look for horizontal lines in taskbar region
+    edges_bottom = cv2.Canny(bottom_region, 30, 150)
+    lines_bottom = cv2.HoughLinesP(edges_bottom, 1, np.pi/180, 
+                                threshold=80,
+                                minLineLength=width*0.3, 
+                                maxLineGap=20)
+    
+    taskbar_line_y = 0
     if lines_bottom is not None:
         for line in lines_bottom:
             x1, y1, x2, y2 = line[0]
-            y1 += max(0, height-60)
-            y2 += max(0, height-60)
+            # Adjust coordinates to full image space
+            y1 += height - bottom_region_height
+            y2 += height - bottom_region_height
             
-            if abs(y1 - y2) < 5:
-                bottom_region_height = height - y1
-                bottom_offset = max(bottom_offset, bottom_region_height)
+            if abs(y1 - y2) < 5 and abs(x2 - x1) > width * 0.3:
+                bottom_region_height = height - min(y1, y2)
+                if 20 < bottom_region_height < 60:  # Typical taskbar height range
+                    taskbar_line_y = min(y1, y2)
     
-    # Check for solid color taskbar
-    if bottom_offset == 0:
-        bottom_10px = gray_img[height-10:height, :]
-        bottom_30px = gray_img[height-30:height-20, :]
-        
-        if abs(np.mean(bottom_10px) - np.mean(bottom_30px)) > 15:
-            bottom_offset = 40  # Default Windows taskbar height
+    # Method 2: Analyze structural patterns in taskbar region
     
-    # Print detection results with confidence information
+    # Windows taskbar typically has a row of icons at the bottom
+    # Check for clustered edge density at bottom
+    bottom_edge_density = np.sum(edges_bottom, axis=1)
+    max_density_row = np.argmax(bottom_edge_density)
+    max_density = bottom_edge_density[max_density_row]
+    
+    taskbar_detected = max_density > width * 0.3
+    
+    # Check for pattern of icons in bottom area
+    icon_pattern_found = False
+    
+    # Divide bottom into columns and check for icon-like structures
+    num_columns = 10
+    column_width = width // num_columns
+    icon_columns = 0
+    
+    for i in range(num_columns):
+        column = bottom_region[:, i*column_width:(i+1)*column_width]
+        column_std = np.std(column)
+        if column_std > 30:  # High variance suggests icon or UI element
+            icon_columns += 1
+    
+    # If multiple high-variance columns found, likely taskbar with icons
+    if icon_columns >= 3:
+        icon_pattern_found = True
+        taskbar_detected = True
+    
+    # Method 3: Check gradient magnitude at bottom of image
+    # Strong gradient often indicates transition to taskbar
+    bottom_gradients = np.abs(np.gradient(np.mean(gray_img[height-50:height, :], axis=1)))
+    max_gradient_idx = np.argmax(bottom_gradients)
+    max_gradient = bottom_gradients[max_gradient_idx]
+    
+    if max_gradient > 10:
+        taskbar_detected = True
+        if taskbar_line_y == 0:  # Only use if no line was detected
+            taskbar_line_y = height - 50 + max_gradient_idx
+    
+    # Make final determination on taskbar
+    if taskbar_line_y > 0:
+        bottom_offset = height - taskbar_line_y
+    elif taskbar_detected or icon_pattern_found:
+        # Use default taskbar height if detected but no clear line
+        bottom_offset = 40  # Standard Windows taskbar height
+    
+    # Default to standard taskbar height if detection is uncertain but indicators present
+    if bottom_offset < 10 and taskbar_detected:
+        bottom_offset = 40
+        print("[INFO] Using default taskbar height: 40px")
+    
+    # Print detection results
     print(f"[INFO] Browser UI detection results:")
-    print(f"       - Top UI detected: {top_offset}px")
-    print(f"       - Bookmarks bar: {has_bookmarks} (confidence: {bookmark_confidence}/{required_confidence})")
-    print(f"       - Bookmark offset: {bookmark_offset}px")
-    print(f"       - Bottom UI detected: {bottom_offset}px")
+    print(f"       - Top browser chrome: {top_offset}px")
+    print(f"       - Bookmarks bar: {has_bookmarks} (height: {bookmark_offset}px)")
+    print(f"       - Bottom UI/taskbar: {bottom_offset}px")
     
     return top_offset, bookmark_offset, bottom_offset, has_bookmarks
-
 
 def get_image_url(image_path):
     """
@@ -213,7 +388,7 @@ def write_to_omniparser(screenshot_path):
         return None
 
     try:
-        #Time_stamp for the debug image
+        # Time_stamp for the debug image
         timestamp = int(time.time())
         # Read original image
         img = cv2.imread(screenshot_path)
@@ -265,6 +440,13 @@ def write_to_omniparser(screenshot_path):
         if total_top_offset > 0 or bottom_offset > 0:
             # Calculate the new crop boundaries
             end_y = original_height - bottom_offset if bottom_offset > 0 else original_height
+            
+            # Ensure we don't try to crop beyond image boundaries
+            if total_top_offset >= end_y:
+                print("[WARNING] Invalid crop boundaries detected, adjusting...")
+                total_top_offset = min(total_top_offset, end_y - 100)  # Ensure at least 100px height
+            
+            # Perform the crop
             img = img[total_top_offset:end_y, :, :]
             
             # Save the cropped image with a new name for verification
