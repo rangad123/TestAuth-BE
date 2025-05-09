@@ -8,10 +8,10 @@ from django.http import JsonResponse
 from django.conf import settings
 import pyautogui
 import random
-from .window_utils import find_chrome_windows_by_pid, update_window_title, get_chrome_windows, disable_focus_stealing_prevention
+from .window_utils import find_chrome_windows_by_pid, update_window_title, get_chrome_windows, \
+    disable_focus_stealing_prevention
 from .session_manager import user_sessions
 from .config import BROWSER_PATH
-
 
 if sys.platform == 'win32':
     import win32gui
@@ -92,8 +92,7 @@ def open_browser(user_id, url):
             ])
 
         # Wait longer for Chrome to launch (increased from 5 to 10 seconds)
-        # Replace time.sleep(10) with:
-        time.sleep(5)  # Initial shorter wait
+        time.sleep(5)
 
         # Get new Chrome windows with detailed info
         all_new_windows = get_chrome_windows()
