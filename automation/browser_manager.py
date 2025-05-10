@@ -8,8 +8,9 @@ from django.http import JsonResponse
 from django.conf import settings
 import pyautogui
 import random
-from .window_utils import find_chrome_windows_by_pid, update_window_title, get_chrome_windows, \
-    disable_focus_stealing_prevention
+from pywinauto import Desktop
+from .window_utils import find_chrome_windows_by_pid, update_window_title
+from .window_utils import get_chrome_windows, disable_focus_stealing_prevention
 from .session_manager import user_sessions
 from .config import BROWSER_PATH
 
@@ -34,6 +35,16 @@ if sys.platform == 'win32':
     SPI_SETFOREGROUNDLOCKTIMEOUT = 0x2001
 
 
+def is_chrome_bookmarks_bar_visible(hwnd):
+    try:
+        app = Desktop(backend="uia")
+        win = app.window(handle=int(hwnd))
+        toolbar = win.child_window(control_type="ToolBar", title_re=".*Bookmarks.*")
+        return toolbar.exists() and toolbar.is_visible()
+    except Exception as e:
+        print(f"[WARN] Bookmark detection failed: {e}")
+        return False
+
 def open_browser(user_id, url):
     """Opens a new Chrome browser window and tracks its title and process ID."""
     print(f"[INFO] Opening URL {url} for user {user_id}")
@@ -46,72 +57,41 @@ def open_browser(user_id, url):
     initial_windows = get_chrome_windows()
 
     try:
-        # Create process with startupinfo to ensure it appears in foreground
         if sys.platform == 'win32':
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            # startupinfo.wShowWindow = subprocess.SW_MAXIMIZE
 
-            # Disable focus stealing prevention before starting Chrome
             disable_focus_stealing_prevention()
 
-            # Launch Chrome with process priority
             process = subprocess.Popen([
                 BROWSER_PATH,
                 "--new-window",
                 "--start-maximized",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--disable-extensions",
+                "--disable-session-crashed-bubble",
                 "--disable-infobars",
-                "--disable-popup-blocking",
-                "--disable-translate",
-                "--disable-notifications",
-                "--disable-sync",
-                "--disable-component-update",
-                "--guest",
                 url
             ], startupinfo=startupinfo)
         else:
-            # For non-Windows platforms
             process = subprocess.Popen([
                 BROWSER_PATH,
                 "--new-window",
                 "--start-maximized",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--disable-extensions",
+                "--disable-session-crashed-bubble",
                 "--disable-infobars",
-                "--disable-popup-blocking",
-                "--disable-translate",
-                "--disable-notifications",
-                "--disable-sync",
-                "--disable-component-update",
-                "--guest",
                 url
             ])
 
-        # Wait longer for Chrome to launch (increased from 5 to 10 seconds)
         time.sleep(7)
 
-        # Get new Chrome windows with detailed info
         all_new_windows = get_chrome_windows()
-
-        # Log window information for debugging
         print(f"[DEBUG] Initial windows: {len(initial_windows)}")
         print(f"[DEBUG] All windows after launch: {len(all_new_windows)}")
 
-        # More flexible window detection - consider both title and URL
         new_windows = []
         for window in all_new_windows:
-            # Check if this window wasn't in the initial list
-            is_new = not any(initial_w['title'] == window['title'] for initial_w in initial_windows)
-
-            # Special case: sometimes Chrome reuses existing windows
-            # Check if the URL domain is in the window title
+            is_new = not any(w['title'] == window['title'] for w in initial_windows)
             url_domain = url.split("//")[-1].split("/")[0]
-            domain_parts = url_domain.split(".")
-            base_domain = domain_parts[0] if len(domain_parts) > 0 else ""
+            base_domain = url_domain.split(".")[0]
             has_domain = base_domain.lower() in window['title'].lower()
 
             if is_new or has_domain:
@@ -119,80 +99,59 @@ def open_browser(user_id, url):
                 print(f"[DEBUG] Found potential window match: {window['title']}")
 
         if not new_windows:
-            # Enhanced fallback: Try to find window with URL domain in title
-            url_domain = url.split("//")[-1].split("/")[0]
-            domain_parts = url_domain.split(".")
-            base_domain = domain_parts[0] if len(domain_parts) > 0 else ""
-
-            # First, try to find Chrome windows with domain in title
             domain_windows = [w for w in all_new_windows
                               if 'Chrome' in w['title'] and base_domain.lower() in w['title'].lower()]
-
-            # If domain windows found, use the most recently created one
             if domain_windows:
-                print(f"[INFO] Found domain match window: {domain_windows[0]['title']}")
                 new_window = domain_windows[0]
             else:
-                # Look for any Chrome window that doesn't have "Claude" in the title
-                chrome_windows = [w for w in all_new_windows
-                                  if 'Chrome' in w['title'] and 'Claude' not in w['title']]
-
+                chrome_windows = [w for w in all_new_windows if 'Chrome' in w['title']]
                 if chrome_windows:
-                    print(f"[INFO] Using Chrome window without domain match: {chrome_windows[0]['title']}")
                     new_window = chrome_windows[0]
                 else:
-                    # Last resort: use any Chrome window
-                    chrome_windows = [w for w in all_new_windows if 'Chrome' in w['title']]
-                    if chrome_windows:
-                        print(f"[WARN] No better match found. Using fallback: {chrome_windows[0]['title']}")
-                        new_window = chrome_windows[0]
-                    else:
-                        print("[ERROR] No Chrome window detected.")
-                        return False
-
+                    print("[ERROR] No Chrome window detected.")
+                    return False
         else:
             new_window = new_windows[0]
 
-        # Store detailed window information with more specifics
-        window_key = f"{url}_{time.time()}"  # Using URL+timestamp as unique key
-        print(f"[DEBUG] Generated unique window key: {window_key}")
-
+        window_key = f"{url}_{time.time()}"
         user_sessions[user_id]['windows'][window_key] = {
             'url': url,
             'title': new_window['title'],
-            'exact_title': new_window['title'],  # Store the exact title
+            'exact_title': new_window['title'],
             'pid': new_window['pid'],
             'hwnd': new_window['hwnd'],
             'time_created': time.time(),
             'last_activated': time.time()
         }
 
-        # Remember this as the current window
         user_sessions[user_id]['current_window'] = window_key
-        print(f"[DEBUG] Set current_window to: {window_key}")
+        print(f"[INFO] Stored window info: Title={new_window['title']}, PID={new_window['pid']}")
 
-        print(f"[INFO] Stored window info: Title={new_window['title']}, PID={new_window['pid']} for URL {url}")
-
-        # Try to set focus immediately after creation
         if sys.platform == 'win32' and new_window['hwnd']:
             try:
-                # Try to activate window
                 win32gui.SetForegroundWindow(new_window['hwnd'])
-
-                # Check if activation was successful
                 active_hwnd = user32.GetForegroundWindow()
+
                 if active_hwnd == new_window['hwnd']:
                     print(f"[INFO] Successfully activated new window: {new_window['title']}")
                 else:
-                    print(f"[WARN] Failed to activate new window immediately")
+                    print(f"[WARN] Failed to activate new window")
+
+                # ✅ Bookmark bar detection and hiding logic here
+                if is_chrome_bookmarks_bar_visible(active_hwnd):
+                    print("[INFO] Bookmarks bar is visible. Sending Ctrl+Shift+B to hide it.")
+                    pyautogui.hotkey('ctrl', 'shift', 'b')
+                    time.sleep(1)
+                else:
+                    print("[INFO] Bookmarks bar not visible or detection failed.")
+
             except Exception as e:
-                print(f"[WARN] Failed to set focus on new window: {e}")
+                print(f"[WARN] Failed to set focus or toggle bookmarks bar: {e}")
 
         return True
+
     except Exception as e:
         print(f"[ERROR] Failed to open Chrome: {e}")
         traceback.print_exc()
         return False
-
-
 
