@@ -17,11 +17,11 @@ import threading
 import atexit
 import pygetwindow as gw
 import random
+from pywinauto import Desktop
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
-
 from .browser_manager import open_browser, update_window_title, is_chrome_bookmarks_bar_visible
 from .screenshot_manager import take_screenshot, Run_test_screenshot
 from .omniparser_client import send_to_omniparser
@@ -995,7 +995,6 @@ def get_browser_tabs(request):
             "status": "error",
             "message": str(e)
         }, status=500)
-
 
 
 

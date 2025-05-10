@@ -154,4 +154,3 @@ def open_browser(user_id, url):
         print(f"[ERROR] Failed to open Chrome: {e}")
         traceback.print_exc()
         return False
-

@@ -5,11 +5,7 @@ import replicate
 import sys
 import os
 import time
-import numpy as np
-from django.http import JsonResponse
 from django.conf import settings
-from django.urls import reverse
-from django.contrib.sites.shortcuts import get_current_site
 
 REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN", "")
 os.environ["REPLICATE_API_TOKEN"] = REPLICATE_API_TOKEN
