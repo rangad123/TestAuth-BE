@@ -6,6 +6,7 @@ import sys
 import os
 import time
 import numpy as np
+import ctypes
 from django.http import JsonResponse
 from django.conf import settings
 from django.urls import reverse
@@ -40,16 +41,25 @@ def convert_numpy_types(obj):
     else:
         return obj
 
-
-import cv2
-import numpy as np
-
+def get_windows_display_scaling():
+    """
+    Returns the scaling percentage used by Windows (e.g., 100, 125, 150)
+    """
+    user32 = ctypes.windll.user32
+    user32.SetProcessDPIAware()  # Mark this process as DPI aware
+    dpi = ctypes.windll.gdi32.GetDeviceCaps(user32.GetDC(0), 88)  # 88 = LOGPIXELSX
+    scaling_percentage = int(dpi / 96 * 100)  # 96 DPI is 100%
+    print(f"[DEBUG] Windows DPI scaling detected: {dpi} DPI ({scaling_percentage}%)")
+    return dpi, scaling_percentage
 
 def detect_browser_ui(img):
     """
     Detects browser UI elements: top bar, bookmarks bar, and bottom taskbar.
     Returns: top_offset, bookmark_offset, bottom_offset, has_bookmarks
     """
+    dpi, scale_percent = get_windows_display_scaling()
+    print(f"[INFO] Display DPI: {dpi}, Scale Percentage: {scale_percent}%")
+
     height, width, _ = img.shape
     print(f"[INFO] Processing image with dimensions: {width}x{height}")
 
@@ -70,7 +80,6 @@ def detect_browser_ui(img):
     print(f"[RESULT] Bottom taskbar offset: {bottom_offset}")
 
     return top_offset, bookmark_offset, bottom_offset, has_bookmarks
-
 
 def detect_top_chrome(gray_img, width, height):
     print("[STEP] Detecting top browser chrome...")
@@ -131,7 +140,6 @@ def detect_top_chrome(gray_img, width, height):
         top_offset = 75
 
     return top_offset
-
 
 def detect_bookmarks(gray_img, top_offset, width, height):
     print("[STEP] Detecting bookmarks bar...")
@@ -254,7 +262,6 @@ def detect_bookmarks(gray_img, top_offset, width, height):
 
     return has_bookmarks, bookmark_offset
 
-
 def detect_bottom_taskbar(gray_img, width, height):
     print("[STEP] Detecting bottom taskbar...")
     bottom_offset = 0
@@ -285,7 +292,6 @@ def detect_bottom_taskbar(gray_img, width, height):
 
     return bottom_offset
 
-
 def get_image_url(image_path):
     """
     Convert an image file path to a URL that can be accessed from the frontend.
@@ -293,7 +299,6 @@ def get_image_url(image_path):
     """
     # Just return the media URL with the basename of the image
     return f"{settings.MEDIA_URL}{os.path.basename(image_path)}"
-
 
 def write_to_omniparser(screenshot_path):
     if not REPLICATE_API_TOKEN:
@@ -583,7 +588,6 @@ def write_to_omniparser(screenshot_path):
 
     except Exception as e:
         return {"error": str(e), "trace": traceback.format_exc()}
-
 
 def send_to_omniparser(screenshot_path):
     if not REPLICATE_API_TOKEN:

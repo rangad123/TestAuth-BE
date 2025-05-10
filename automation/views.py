@@ -996,6 +996,19 @@ def get_browser_tabs(request):
         }, status=500)
 
 
+from pywinauto import Desktop
+
+def is_chrome_bookmarks_bar_visible(hwnd):
+    try:
+        app = Desktop(backend="uia")
+        win = app.window(handle=int(hwnd))
+        toolbar = win.child_window(control_type="ToolBar", title_re=".*Bookmarks.*")
+        return toolbar.exists() and toolbar.is_visible()
+    except Exception as e:
+        logger.warning(f"Bookmark detection failed: {e}")
+        return False
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def process_browser_tab(request):
@@ -1053,6 +1066,14 @@ def process_browser_tab(request):
         # Extra delay to ensure window is fully focused
         time.sleep(2)
 
+        # Detect bookmark bar and hide it if visible
+        if active_hwnd and is_chrome_bookmarks_bar_visible(active_hwnd):
+            print("Bookmarks bar is visible. Sending Ctrl+Shift+B to hide it.")
+            pyautogui.hotkey('ctrl', 'shift', 'b')
+            time.sleep(1)  # Give time for UI to update
+        else:
+            print("Bookmarks bar not visible or detection failed.")
+
         # Take screenshot - calling your existing function
         screenshot_path, screenshot_url = take_screenshot(user_id)
 
@@ -1069,7 +1090,7 @@ def process_browser_tab(request):
             logger.info(f"Window minimization: {'Success' if minimized else 'Failed'}")
 
         # Send to omniparser - calling your existing function
-        omniparser_response = write_to_omniparser(screenshot_path)
+        omniparser_response = send_to_omniparser(screenshot_path)
 
         return JsonResponse({
             "status": "success",
