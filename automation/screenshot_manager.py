@@ -1,19 +1,21 @@
 import os
 import time
+import sys
 import pyautogui
 from django.conf import settings
 from .config import MEDIA_DIR
 from .session_manager import user_sessions
 import pygetwindow as gw
 import traceback
-import win32gui
-import win32gui
-import win32con
-import win32api
-import win32process
-import ctypes
-from ctypes import wintypes
 
+if sys.platform == 'win32':
+    import win32gui
+    import win32con
+    import win32api
+    import win32process
+    import win32com.client
+    import ctypes
+    from ctypes import wintypes
 
 def take_screenshot(user_id, context=""):
     """Capture a screenshot on the local machine"""

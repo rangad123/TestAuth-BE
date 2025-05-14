@@ -1,24 +1,13 @@
 from django.shortcuts import render
 import sys
-import os
 import time
 import pyautogui
-import subprocess
-import json
-import requests
 from django.http import JsonResponse
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
-import cv2
 import traceback
 import pygetwindow as gw
-import random
-import pygetwindow as gw
 import ctypes
-import win32gui
-import win32api
-import win32con
-import win32process
 import sys
 from .session_manager import user_sessions
 
@@ -27,6 +16,7 @@ if sys.platform == 'win32':
     import win32con
     import win32api
     import win32process
+    import win32com.client
     import ctypes
     from ctypes import wintypes
 

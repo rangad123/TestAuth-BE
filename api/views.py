@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from rest_framework import viewsets
-from rest_framework import status, permissions
+from rest_framework import status
 from django.db.models import Prefetch
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -294,32 +294,44 @@ class OrganizationProjectsView(APIView):
 class ProjectMembersView(APIView):
     def get(self, request, project_id):
         try:
-            # Fetch project members for the given project ID
+            # Fetch all invitations for the project
+            project_invitations = ProjectInvitation.objects.filter(project_id=project_id)
+            # Fetch all accepted members
             project_members = ProjectMember.objects.filter(project_id=project_id).select_related('user')
-            project_invitations = ProjectInvitation.objects.filter(project_id=project_id)  # Fetch all invitations for the project
+
             members_data = []
 
-            for member in project_members:
-                user = member.user
+            # Map accepted users by email for fast lookup
+            accepted_user_emails = {member.user.email: member for member in project_members}
 
-                # Filter invitation records related to this specific member
-                # Assuming there is a way to match members with invitations (e.g., by email, name, etc.)
-                invitation_status = "No Invitation Found"
-                for invitation in project_invitations:
-                    if invitation.recipient_email == user.email:  # Example match by email (adjust logic if needed)
-                        invitation_status = invitation.status
-                        break  # Stop looking once a match is found
+            # Go through all invitations
+            for invitation in project_invitations:
+                invited_email = invitation.recipient_email
+                member_info = accepted_user_emails.get(invited_email)
 
-                # Append member data with invitation status
-                members_data.append({
-                    "id": user.id,
-                    "name": user.name,
-                    "email": user.email,
-                    "phone": user.phone,
-                    "country": user.country,
-                    "added_at": member.added_at,
-                    "invitation_status": invitation_status,  # Add specific status for this user
-                })
+                if member_info:
+                    # User has accepted and is a member
+                    user = member_info.user
+                    members_data.append({
+                        "id": user.id,
+                        "name": user.name,
+                        "email": user.email,
+                        "phone": user.phone,
+                        "country": user.country,
+                        "added_at": member_info.added_at,
+                        "invitation_status": invitation.status,
+                    })
+                else:
+                    # User hasn't accepted yet
+                    members_data.append({
+                        "id": None,
+                        "name": None,
+                        "email": invited_email,
+                        "phone": None,
+                        "country": None,
+                        "added_at": None,
+                        "invitation_status": invitation.status,
+                    })
 
             return Response(members_data, status=status.HTTP_200_OK)
 
@@ -702,7 +714,8 @@ class AcceptInvitationView(APIView):
         # Add user to project members
         ProjectMember.objects.create(
             project=invitation.project,
-            user=user
+            user=user,
+            invitation=invitation
         )
 
         # Update invitation status
@@ -765,7 +778,21 @@ class ProtectedView(APIView):
         )
 
 
+from .serializers import ProjectMemberDetailSerializer
 
+class ProjectMemberDetailsView(APIView):
+    def get(self, request):
+        email_id = request.data.get("email_id")
+        if not email_id:
+            return Response({'error': 'Email ID is required'}, status=status.HTTP_400_BAD_REQUEST)
 
+        try:
+            # Get the invitation
+            invitation = ProjectInvitation.objects.get(recipient_email=email_id, status='Accepted')
+            # Get the member associated with the invitation
+            member = ProjectMember.objects.get(invitation=invitation)
+        except (ProjectInvitation.DoesNotExist, ProjectMember.DoesNotExist):
+            return Response({'error': 'Accepted member not found for the given email'}, status=status.HTTP_404_NOT_FOUND)
 
-
+        serializer = ProjectMemberDetailSerializer(member)
+        return Response(serializer.data, status=status.HTTP_200_OK)

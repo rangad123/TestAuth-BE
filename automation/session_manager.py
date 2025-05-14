@@ -1,18 +1,7 @@
 from django.shortcuts import render
-import sys
-import os
 import time
-import pyautogui
-import subprocess
-import json
-import requests
-from django.http import JsonResponse
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
-import cv2
-import re
-import traceback
-import replicate
 import threading
 import atexit
 import pygetwindow as gw

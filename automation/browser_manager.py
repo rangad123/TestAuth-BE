@@ -8,7 +8,7 @@ from django.http import JsonResponse
 from django.conf import settings
 import pyautogui
 import random
-from pywinauto import Desktop
+from pywinauto import Desktop # type: ignore
 from .window_utils import find_chrome_windows_by_pid, update_window_title
 from .window_utils import get_chrome_windows, disable_focus_stealing_prevention
 from .session_manager import user_sessions
