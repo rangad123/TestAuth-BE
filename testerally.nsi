@@ -2,7 +2,7 @@
 !define APPNAME "TesterAlly-Installer"
 !define INSTALLDIR "$PROGRAMFILES\${APPNAME}"
 
-OutFile "TesterAlly_01_016.exe"
+OutFile "TesterAlly_01_017.exe"
 InstallDir ${INSTALLDIR}
 
 Section "Install"
