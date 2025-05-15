@@ -614,6 +614,10 @@ def run_testsuite(request):
                 "steps": []
             }
 
+            total_cases = len(testcase_ids)
+            steps = list(testcase.steps.all())
+            total_steps = len(steps)
+
             for step_index, step in enumerate(testcase.steps.all()):  # Ordered by step_number due to Meta
                 # Wait between steps (skip for the first step)
                 if step_index > 0:
@@ -623,8 +627,11 @@ def run_testsuite(request):
                 click_x = step.step_coordinates.get('click_x') if step.step_coordinates else None
                 click_y = step.step_coordinates.get('click_y') if step.step_coordinates else None
 
+                # Check if this is the last step of the last case
+                is_final_step = (case_index == total_cases - 1) and (step_index == total_steps - 1)
+
                 try:
-                    response = Execute_command_internal(command, user_id, click_x, click_y)
+                    response = Execute_command_internal(command, user_id, click_x, click_y, is_final_step=is_final_step)
 
                     # Fix: Check for success status with proper conditions
                     # The command execution appears successful when it returns certain status values
@@ -688,12 +695,13 @@ def run_testsuite(request):
 
 # This function simulates calling the Execute_command logic internally.
 # You can adapt this if Execute_command is moved to another module.
-def Execute_command_internal(command, user_id, click_x, click_y):
+def Execute_command_internal(command, user_id, click_x, click_y, is_final_step):
     request_data = {
         "command": command,
         "user_id": user_id,
         "click_x": click_x,
-        "click_y": click_y
+        "click_y": click_y,
+        "is_final_step":is_final_step
     }
 
     # Simulate request object
