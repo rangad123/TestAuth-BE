@@ -503,9 +503,29 @@ def wait(request):
 
         if not condition:
             time.sleep(timeout / 1000.0)
+
+            screenshot_path, screenshot_url = take_screenshot(user_id, "wait")
+            if not screenshot_path:
+                return JsonResponse({
+                    "status": "error",
+                    "message": "Screenshot failed.",
+                    "screenshot_url": screenshot_url
+                }, status=500)
+
+            omniparser_response = send_to_omniparser(screenshot_path)
+            if not omniparser_response or "elements" not in omniparser_response:
+                return JsonResponse({
+                    "status": "error",
+                    "message": "Omniparser failed to return valid elements.",
+                    "screenshot_url": screenshot_url,
+                    "response": omniparser_response 
+                }, status=500)
+
             return JsonResponse({
                 "status": "success",
-                "message": f"Waited for {timeout} ms (static wait)."
+                "message": f"Waited for {timeout} ms (static wait).",
+                "screenshot_url": screenshot_url,
+                "omniparser_elements": omniparser_response
             })
 
         start_time = time.time()
@@ -532,7 +552,7 @@ def wait(request):
                 if expected_text in current_url:
                     return True, [{"name": current_url, "type": "url"}], None, screenshot_url
 
-            screenshot_path, screenshot_url = take_screenshot(user_id,"wait")
+            screenshot_path, screenshot_url = take_screenshot(user_id, "wait")
             if not screenshot_path:
                 return False, [], None, screenshot_url
 
@@ -555,8 +575,7 @@ def wait(request):
                     "status": "success",
                     "message": message,
                     "matched_elements": matched_elements if debug else None,
-                    "screenshot_url": screenshot_url,
-                    
+                    "screenshot_url": screenshot_url
                 })
 
             elapsed = (time.time() - start_time) * 1000
