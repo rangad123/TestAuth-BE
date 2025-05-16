@@ -1,15 +1,11 @@
 import pyautogui
 import pyperclip
-import json
-import requests
-import os
 import re
 import time
 import sys
 import pygetwindow as gw
 import subprocess
 import traceback
-from django.http import JsonResponse
 from django.conf import settings
 from .session_manager import user_sessions
 from .omniparser_client import send_to_omniparser

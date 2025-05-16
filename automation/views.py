@@ -3,37 +3,39 @@ import sys
 import os
 import time
 import pyautogui
-import subprocess
 import json
-import requests
-from django.http import JsonResponse
+from django.http import JsonResponse,HttpRequest
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
-import cv2
-import re
 import traceback
-import replicate
-import threading
-import atexit
 import pygetwindow as gw
-import random
-from pywinauto import Desktop
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
+import pyperclip
 from .browser_manager import open_browser, update_window_title, is_chrome_bookmarks_bar_visible
 from .screenshot_manager import take_screenshot, Run_test_screenshot
 from .omniparser_client import send_to_omniparser
 from .ui_action import perform_ui_action, Execute_ui_action
 from .session_manager import user_sessions
 from .window_utils import get_chrome_windows
+from api.models import TestSuite, TestCase, TestStep
+from django.views.decorators.http import require_http_methods
+import logging
+from collections import defaultdict
+import psutil
+
+
+
+
 
 if sys.platform == 'win32':
     import win32gui
     import win32con
     import win32api
     import win32process
+    import win32com.client
     import ctypes
     from ctypes import wintypes
 
@@ -438,39 +440,130 @@ def execute_test_case(request):
         return JsonResponse({"error": f"Internal server error: {str(e)}"}, status=500)
 
 
-import time
-import json
-import traceback
-from django.http import JsonResponse, HttpRequest
-from django.views.decorators.csrf import csrf_exempt
-from api.models import TestSuite, TestCase, TestStep
-
 
 @csrf_exempt
 def wait(request):
-    """API endpoint to implement a wait/delay"""
     if request.method != "POST":
         return JsonResponse({"error": "Only POST allowed"}, status=405)
 
     try:
         data = json.loads(request.body)
-        duration_ms = data.get("duration_ms", 1000)  # Default 1 second
+        condition = data.get("condition")
+        timeout = data.get("timeout", 10000)  # in ms
+        poll_interval = data.get("poll_interval", 500)  # in ms
+        debug = data.get("debug", False)
+        expected_text = data.get("text", "").lower()
+        window_title = data.get("window_title", "Google Chrome")
+        check_address_bar = data.get("check_address_bar", False)
 
-        # Convert milliseconds to seconds and sleep
-        time.sleep(duration_ms / 1000)
+        # ✅ Static Wait (no condition, just wait for timeout)
+        if not condition:
+            time.sleep(timeout / 1000.0)
+            return JsonResponse({
+                "status": "success",
+                "message": f"Waited for {timeout} ms (static wait)."
+            })
+        
+        # Step 1: Activate window
+        chrome_windows = [win for win in gw.getWindowsWithTitle(window_title) if win is not None]
+        if chrome_windows:
+            hwnd = chrome_windows[0]._hWnd
+            win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+            win32gui.SetForegroundWindow(hwnd)
+            print(f"[INFO] Activated and maximized: {chrome_windows[0].title}")
+        else:
+            return JsonResponse({"error": f"Window '{window_title}' not found"}, status=404)
 
-        return JsonResponse({
-            "status": "success",
-            "message": f"Waited for {duration_ms} milliseconds"
-        })
+        time.sleep(2)
 
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON format"}, status=400)
+        start_time = time.time()
+        debug_elements = []
+
+        def get_address_bar_text():
+            """Get the URL from Chrome's address bar using pyautogui."""
+            try:
+                # Focus on the address bar using keyboard shortcut
+                pyautogui.hotkey('alt', 'd')  # Or use Ctrl+L as alternative
+                time.sleep(0.5)
+                
+                # Copy URL to clipboard
+                pyautogui.hotkey('ctrl', 'c')
+                time.sleep(0.5)
+                
+                # Get clipboard content
+                url = pyperclip.paste()
+                
+                # Click away from address bar (click at a safe position in the window)
+                window = chrome_windows[0]
+                pyautogui.click(window.left + 100, window.top + 100)
+                
+                print(f"[INFO] Address bar text: {url}")
+                return url.lower()
+            except Exception as e:
+                print(f"[ERROR] Failed to get address bar text: {str(e)}")
+                return ""
+
+        def is_text_found():
+            if check_address_bar:
+                current_url = get_address_bar_text()
+                if  expected_text  in current_url:
+                    return True, [{"name": current_url, "type": "url"}], None
+            
+            # For non-URL checks, take screenshot and use OCR
+            screenshot = pyautogui.screenshot()
+            temp_path = os.path.join(settings.BASE_DIR, "wait_temp_screenshot.png")
+            screenshot.save(temp_path)
+
+            response = send_to_omniparser(temp_path)
+            if not response or "elements" not in response:
+                return False, [], response
+
+            elements = response["elements"]
+            matched = [
+                e for e in elements
+                if expected_text in e.get("name", "").lower()
+            ]
+            return bool(matched), matched, response
+
+        # Polling loop
+        while True:
+            found, matched_elements, full_response = is_text_found()
+
+            if found:
+                if check_address_bar:
+                    return JsonResponse({
+                        "status": "success",
+                        "message": f"URL containing '{expected_text}' found in address bar.",
+                        "matched_elements": matched_elements if debug else None
+                    })
+                else:
+                    return JsonResponse({
+                        "status": "success",
+                        "message": f"Text '{expected_text}' found.",
+                        "matched_elements": matched_elements if debug else None
+                    })
+
+            elapsed = (time.time() - start_time) * 1000  # in ms
+            if elapsed > timeout:
+                if check_address_bar:
+                    return JsonResponse({
+                        "status": "timeout",
+                        "message": f"URL containing '{expected_text}' not found in address bar within timeout.",
+                        "matched_elements": matched_elements if debug else None
+                    })
+                else:
+                    return JsonResponse({
+                        "status": "timeout",
+                        "message": f"Text '{expected_text}' not found within timeout.",
+                        "matched_elements": matched_elements if debug else None
+                    })
+
+            time.sleep(poll_interval / 1000.0)
+
     except Exception as e:
         traceback.print_exc()
         return JsonResponse({"error": f"Unexpected error: {str(e)}"}, status=500)
-
-
+    
 @csrf_exempt
 def run_testsuite(request):
     if request.method != "POST":
@@ -611,12 +704,6 @@ def Execute_command_internal(command, user_id, click_x, click_y):
     return json.loads(Execute_command(fake_request).content.decode())
 
 
-from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
-import json, time
-import pygetwindow as gw
-import win32gui, win32con
-
 
 @csrf_exempt
 def insert_screen(request):
@@ -659,21 +746,8 @@ def insert_screen(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-import json
-import time
-import logging
-from collections import defaultdict
-import pygetwindow as gw
-import win32gui
-import win32con
-import win32process
-import win32api
-import win32com.client
-import ctypes
-import psutil
-from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
+#for write manually step screen
+
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -1095,3 +1169,5 @@ def process_browser_tab(request):
             "status": "error",
             "message": str(e)
         }, status=500)
+    
+

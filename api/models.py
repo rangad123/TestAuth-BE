@@ -130,10 +130,12 @@ class ProjectInvitation(models.Model):
 class ProjectMember(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="members")
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="project_memberships")
+    invitation = models.OneToOneField(ProjectInvitation, on_delete=models.SET_NULL, null=True, blank=True, related_name="member")
     added_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.user.name} in project {self.project.name}"
+    
 # Database Types Tables
 
 class TestCaseType(models.Model):
@@ -156,5 +158,4 @@ class RequirementType(models.Model):
 
     def __str__(self):
         return self.type_name
-
 
