@@ -781,7 +781,7 @@ class ProtectedView(APIView):
 from .serializers import ProjectMemberDetailSerializer
 
 class ProjectMemberDetailsView(APIView):
-    def get(self, request):
+    def post(self, request):
         email_id = request.data.get("email_id")
         if not email_id:
             return Response({'error': 'Email ID is required'}, status=status.HTTP_400_BAD_REQUEST)
