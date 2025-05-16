@@ -3,7 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import ProjectViewSet,TestCaseViewSet,TestSuiteViewSet,RequirementViewSet
 from .views import RegisterView, LoginView, ForgotPasswordView, ResetPasswordView
 from .views import TestCaseTypeViewSet, TestCasePriorityViewSet, RequirementTypeViewSet, SendInvitationView, AcceptInvitationView, TestStepViewSet
-from .views import UserListView, ProjectListView, TestCaseListView, TestSuiteListView, RequirementListView, RoleView
+from .views import UserListView, ProjectListView, TestCaseListView, TestSuiteListView, RequirementListView, RoleView, ProjectMemberDetailsView
 from .views import OrganizationView, OrganizationProjectsView, ProjectMembersView, TestDataView, UserProjectDataView, OrganizationProjectDetailsView
 
 # Router for viewsets
@@ -36,6 +36,8 @@ urlpatterns = [
     path('testdata/<int:project_id>/', TestDataView.as_view(), name='testdata'),
     path('user-projects/<int:user_id>/', UserProjectDataView.as_view(), name='user-project-data'),
     path('organization/<int:organization_id>/projects/', OrganizationProjectDetailsView.as_view(), name='organization-projects'),
+    path('project-member-details/', ProjectMemberDetailsView.as_view(), name='ProjectMemberDetailsView'),
+
 ]
 
 # Include router URLs for viewsets
