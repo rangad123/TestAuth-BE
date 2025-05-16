@@ -27,9 +27,6 @@ from collections import defaultdict
 import psutil
 
 
-
-
-
 if sys.platform == 'win32':
     import win32gui
     import win32con
