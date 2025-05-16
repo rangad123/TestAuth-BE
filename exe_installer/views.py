@@ -12,6 +12,27 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.views.decorators.csrf import csrf_exempt
 
+class DisplaySystemInfoView(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        exe_id = request.query_params.get('exe_id')
+
+        if not exe_id:
+            return Response({"error": "exe_id is required as query param"}, status=400)
+
+        try:
+            # Get system info for that user
+            system_info = SystemInfo.objects.filter(exe_download_id=exe_id)
+            
+            if not system_info.exists():
+                return Response({"message": "No system info found for this user."}, status=status.HTTP_404_NOT_FOUND)
+
+            serializer = SystemInfoSerializer(system_info, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class TrackDownloadView(APIView):
     permission_classes = []

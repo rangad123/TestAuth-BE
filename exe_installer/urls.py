@@ -7,6 +7,8 @@ from django.conf.urls.static import static
 urlpatterns = [
     path("EXE_login/", views.EXE_login, name="EXE_login"),
     path('track-download/', TrackDownloadView.as_view(), name='track-download'),
+    path('system-info/', DisplaySystemInfoView.as_view(), name='DisplaySystemInfoView'),
+
 
     
 
