@@ -19,7 +19,7 @@ from .screenshot_manager import take_screenshot, Run_test_screenshot
 from .omniparser_client import send_to_omniparser
 from .ui_action import perform_ui_action, Execute_ui_action
 from .session_manager import user_sessions
-from .window_utils import get_chrome_windows
+from .window_utils import get_chrome_windows,activate_user_window,disable_focus_stealing_prevention
 from api.models import TestSuite, TestCase, TestStep
 from django.views.decorators.http import require_http_methods
 import logging
@@ -445,55 +445,79 @@ def wait(request):
 
     try:
         data = json.loads(request.body)
+        user_id = data.get("user_id")
         condition = data.get("condition")
         timeout = data.get("timeout", 10000)  # in ms
         poll_interval = data.get("poll_interval", 500)  # in ms
         debug = data.get("debug", False)
         expected_text = data.get("text", "").lower()
-        window_title = data.get("window_title", "Google Chrome")
         check_address_bar = data.get("check_address_bar", False)
 
-        # ✅ Static Wait (no condition, just wait for timeout)
+        if sys.platform == 'win32':
+            disable_focus_stealing_prevention()
+
+        activation_success = False
+        for attempt in range(3):
+            if activate_user_window(user_id):
+                activation_success = True
+                break
+            else:
+                print(f"[WARN] Window activation attempt {attempt + 1} failed, retrying...")
+                time.sleep(1)
+
+        if not activation_success:
+            try:
+                print("[INFO] Trying emergency Alt+Tab approach...")
+                chrome_windows = [w for w in gw.getAllWindows() if 'Chrome' in w.title]
+                if chrome_windows:
+                    for window in chrome_windows:
+                        try:
+                            window.minimize()
+                            time.sleep(0.2)
+                        except Exception as e:
+                            print(f"[WARN] Failed to minimize: {e}")
+
+                    time.sleep(1)
+
+                    try:
+                        chrome_windows[0].restore()
+                        time.sleep(0.5)
+                        chrome_windows[0].maximize()
+                        time.sleep(0.5)
+                        activation_success = True
+                    except Exception as e:
+                        print(f"[ERROR] Failed to restore Chrome window: {e}")
+            except Exception as e:
+                print(f"[ERROR] Emergency activation failed: {e}")
+
+        if not activation_success:
+            return JsonResponse({
+                "error": "Failed to locate and activate the correct browser window after multiple attempts"
+            }, status=500)
+
+        if user_id in user_sessions:
+            user_sessions[user_id]['last_active'] = time.time()
+        else:
+            user_sessions[user_id] = {'last_active': time.time(), 'windows': {}}
+            time.sleep(2)
+
         if not condition:
             time.sleep(timeout / 1000.0)
             return JsonResponse({
                 "status": "success",
                 "message": f"Waited for {timeout} ms (static wait)."
             })
-        
-        # Step 1: Activate window
-        chrome_windows = [win for win in gw.getWindowsWithTitle(window_title) if win is not None]
-        if chrome_windows:
-            hwnd = chrome_windows[0]._hWnd
-            win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
-            win32gui.SetForegroundWindow(hwnd)
-            print(f"[INFO] Activated and maximized: {chrome_windows[0].title}")
-        else:
-            return JsonResponse({"error": f"Window '{window_title}' not found"}, status=404)
-
-        time.sleep(2)
 
         start_time = time.time()
-        debug_elements = []
 
         def get_address_bar_text():
-            """Get the URL from Chrome's address bar using pyautogui."""
             try:
-                # Focus on the address bar using keyboard shortcut
-                pyautogui.hotkey('alt', 'd')  # Or use Ctrl+L as alternative
+                pyautogui.hotkey('alt', 'd')
                 time.sleep(0.5)
-                
-                # Copy URL to clipboard
                 pyautogui.hotkey('ctrl', 'c')
                 time.sleep(0.5)
-                
-                # Get clipboard content
                 url = pyperclip.paste()
-                
-                # Click away from address bar (click at a safe position in the window)
-                window = chrome_windows[0]
-                pyautogui.click(window.left + 100, window.top + 100)
-                
+                pyautogui.click(100, 100)
                 print(f"[INFO] Address bar text: {url}")
                 return url.lower()
             except Exception as e:
@@ -501,66 +525,58 @@ def wait(request):
                 return ""
 
         def is_text_found():
+            screenshot_url = None
+
             if check_address_bar:
                 current_url = get_address_bar_text()
-                if  expected_text  in current_url:
-                    return True, [{"name": current_url, "type": "url"}], None
-            
-            # For non-URL checks, take screenshot and use OCR
-            screenshot = pyautogui.screenshot()
-            temp_path = os.path.join(settings.BASE_DIR, "wait_temp_screenshot.png")
-            screenshot.save(temp_path)
+                if expected_text in current_url:
+                    return True, [{"name": current_url, "type": "url"}], None, screenshot_url
 
-            response = send_to_omniparser(temp_path)
-            if not response or "elements" not in response:
-                return False, [], response
+            screenshot_path, screenshot_url = take_screenshot(user_id,"wait")
+            if not screenshot_path:
+                return False, [], None, screenshot_url
 
-            elements = response["elements"]
-            matched = [
-                e for e in elements
-                if expected_text in e.get("name", "").lower()
-            ]
-            return bool(matched), matched, response
+            omniparser_response = send_to_omniparser(screenshot_path)
+            if not omniparser_response or "elements" not in omniparser_response:
+                return False, [], omniparser_response, screenshot_url
 
-        # Polling loop
+            elements = omniparser_response["elements"]
+            matched = [e for e in elements if expected_text in e.get("name", "").lower()]
+            return bool(matched), matched, omniparser_response, screenshot_url
+
         while True:
-            found, matched_elements, full_response = is_text_found()
+            found, matched_elements, full_response, screenshot_url = is_text_found()
 
             if found:
+                message = f"Text '{expected_text}' found."
                 if check_address_bar:
-                    return JsonResponse({
-                        "status": "success",
-                        "message": f"URL containing '{expected_text}' found in address bar.",
-                        "matched_elements": matched_elements if debug else None
-                    })
-                else:
-                    return JsonResponse({
-                        "status": "success",
-                        "message": f"Text '{expected_text}' found.",
-                        "matched_elements": matched_elements if debug else None
-                    })
+                    message = f"URL containing '{expected_text}' found in address bar."
+                return JsonResponse({
+                    "status": "success",
+                    "message": message,
+                    "matched_elements": matched_elements if debug else None,
+                    "screenshot_url": screenshot_url,
+                    
+                })
 
-            elapsed = (time.time() - start_time) * 1000  # in ms
+            elapsed = (time.time() - start_time) * 1000
             if elapsed > timeout:
+                message = f"Text '{expected_text}' not found within timeout."
                 if check_address_bar:
-                    return JsonResponse({
-                        "status": "timeout",
-                        "message": f"URL containing '{expected_text}' not found in address bar within timeout.",
-                        "matched_elements": matched_elements if debug else None
-                    })
-                else:
-                    return JsonResponse({
-                        "status": "timeout",
-                        "message": f"Text '{expected_text}' not found within timeout.",
-                        "matched_elements": matched_elements if debug else None
-                    })
+                    message = f"URL containing '{expected_text}' not found in address bar within timeout."
+                return JsonResponse({
+                    "status": "timeout",
+                    "message": message,
+                    "matched_elements": matched_elements if debug else None,
+                    "screenshot_url": screenshot_url
+                })
 
             time.sleep(poll_interval / 1000.0)
 
     except Exception as e:
         traceback.print_exc()
         return JsonResponse({"error": f"Unexpected error: {str(e)}"}, status=500)
-    
+
 @csrf_exempt
 def run_testsuite(request):
     if request.method != "POST":
