@@ -453,6 +453,11 @@ def wait(request):
         expected_text = data.get("text", "").lower()
         check_address_bar = data.get("check_address_bar", False)
 
+        is_final_step = data.get("is_final_step", False)
+
+        # Print the is_final_step value for debugging
+        print(f"[DEBUG] is_final_step: {is_final_step}")
+
         if sys.platform == 'win32':
             disable_focus_stealing_prevention()
 
@@ -504,7 +509,7 @@ def wait(request):
         if not condition:
             time.sleep(timeout / 1000.0)
 
-            screenshot_path, screenshot_url = take_screenshot(user_id, "wait")
+            screenshot_path, screenshot_url = Run_test_screenshot(user_id, "wait", minimize_after=is_final_step)
             if not screenshot_path:
                 return JsonResponse({
                     "status": "error",
@@ -552,7 +557,7 @@ def wait(request):
                 if expected_text in current_url:
                     return True, [{"name": current_url, "type": "url"}], None, screenshot_url
 
-            screenshot_path, screenshot_url = take_screenshot(user_id, "wait")
+            screenshot_path, screenshot_url = Run_test_screenshot(user_id, "wait", minimize_after=is_final_step)
             if not screenshot_path:
                 return False, [], None, screenshot_url
 
