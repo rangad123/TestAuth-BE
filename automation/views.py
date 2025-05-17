@@ -545,9 +545,13 @@ def wait(request):
             if check_address_bar:
                 current_url = get_address_bar_text()
                 if expected_text in current_url:
+                    time.sleep(1)
+                    screenshot_path, screenshot_url = Run_test_screenshot(user_id, "wait", minimize_after=is_final_step)
                     return True, [{"name": current_url, "type": "url"}], None, screenshot_url
 
+            time.sleep(2)
             screenshot_path, screenshot_url = Run_test_screenshot(user_id, "wait", minimize_after=is_final_step)
+            time.sleep(1)
             if not screenshot_path:
                 return False, [], None, screenshot_url
 
