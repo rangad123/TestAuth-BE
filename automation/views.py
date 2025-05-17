@@ -548,6 +548,10 @@ def wait(request):
                     time.sleep(1)
                     screenshot_path, screenshot_url = Run_test_screenshot(user_id, "wait", minimize_after=is_final_step)
                     return True, [{"name": current_url, "type": "url"}], None, screenshot_url
+                else:
+                    screenshot_path, screenshot_url = Run_test_screenshot(user_id, "wait", minimize_after=is_final_step)
+                    return False, [], None, screenshot_url
+
 
             time.sleep(2)
             screenshot_path, screenshot_url = Run_test_screenshot(user_id, "wait", minimize_after=is_final_step)
