@@ -517,20 +517,10 @@ def wait(request):
                     "screenshot_url": screenshot_url
                 }, status=500)
 
-            omniparser_response = send_to_omniparser(screenshot_path)
-            if not omniparser_response or "elements" not in omniparser_response:
-                return JsonResponse({
-                    "status": "error",
-                    "message": "Omniparser failed to return valid elements.",
-                    "screenshot_url": screenshot_url,
-                    "response": omniparser_response 
-                }, status=500)
-
             return JsonResponse({
                 "status": "success",
                 "message": f"Waited for {timeout} ms (static wait).",
-                "screenshot_url": screenshot_url,
-                "omniparser_elements": omniparser_response
+                "screenshot_url": screenshot_url
             })
 
         start_time = time.time()
