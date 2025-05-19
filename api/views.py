@@ -75,6 +75,17 @@ class RegisterView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        if User.objects.filter(name=data['name']).exists():
+            return Response(
+                {"success": False, "message": "Organization name is already registered."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if User.objects.filter(phone=data['phone']).exists():
+            return Response(
+                {"success": False, "message": "Phone number is already registered."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
        
         hashed_password = make_password(data['password'])
 
