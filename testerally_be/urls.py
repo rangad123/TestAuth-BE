@@ -25,10 +25,11 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
     path('automation/',include('automation.urls')),
-    path('installer/',include('exe_installer.urls'))
+    path('installer/',include('exe_installer.urls')),
+    path ('integrate/',include('github_integration.urls'))
 ]
 
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
-urlpatterns += [re_path(r"^(?!media/).*$", views.react_app)]
+# urlpatterns += [re_path(r"^(?!media/).*$", views.react_app)]

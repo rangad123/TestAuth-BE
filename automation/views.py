@@ -37,8 +37,8 @@ if sys.platform == 'win32':
     from ctypes import wintypes
 
 
-def react_app(request, path=''):
-    return render(request, 'index.html')
+# def react_app(request, path=''):
+#     return render(request, 'index.html')
 
 
 @csrf_exempt
