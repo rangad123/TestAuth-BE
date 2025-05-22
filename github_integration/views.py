@@ -66,7 +66,7 @@ def github_callback(request):
         )
         
         # Redirect to a success page with message
-        return redirect('/github-connected')  # Create this page to show success message
+        return redirect('/github')  # Create this page to show success message
         
     except User.DoesNotExist:
         return JsonResponse({"error": "User not found"}, status=404)
@@ -138,6 +138,60 @@ from .github_test_storage import (
 from api.models import GitHubToken
 
 @csrf_exempt
+def create_project(request):
+    """Create a new project folder and store metadata as JSON"""
+    if request.method != "POST":
+        return JsonResponse({"error": "Only POST allowed"}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        user_id = data.get("user_id")
+        project_name = data.get("project_name")
+        project_type = data.get("project_type")
+        description = data.get("description")
+
+        if not all([user_id, project_name, project_type, description]):
+            return JsonResponse({"error": "All fields are required"}, status=400)
+
+        user = User.objects.get(id=user_id)
+        github_token = GitHubToken.objects.get(user=user)
+
+        if not github_token.clone_path:
+            return JsonResponse({"error": "Repository not cloned"}, status=400)
+
+        project_path = os.path.join(github_token.clone_path, project_name)
+
+        if os.path.exists(project_path):
+            return JsonResponse({"error": f"Project '{project_name}' already exists"}, status=400)
+
+        # Create the project folder
+        os.makedirs(project_path)
+
+        # Save metadata as a JSON file
+        metadata = {
+            "project_name": project_name,
+            "project_type": project_type,
+            "description": description
+        }
+
+        metadata_path = os.path.join(project_path, "project_info.json")
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=4)
+
+        return JsonResponse({
+            "status": "success",
+            "message": f"Project '{project_name}' created with metadata",
+            "project_path": project_path
+        })
+
+    except (User.DoesNotExist, GitHubToken.DoesNotExist):
+        return JsonResponse({"error": "GitHub not connected for this user"}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+@csrf_exempt
 def create_testcase(request):
     if request.method != "POST":
         return JsonResponse({"error": "Only POST allowed"}, status=405)
@@ -156,6 +210,10 @@ def create_testcase(request):
 
         if not project_id:
             return JsonResponse({"error": "Project ID is required"}, status=400)
+        
+        if not github_token.clone_path:
+            return JsonResponse({"error":"Clone Path is Pending"}, status=400)
+        
 
         try:
             project = Project.objects.get(id=project_id)
@@ -343,11 +401,12 @@ def get_available_paths(request):
 
 @csrf_exempt
 def clone_repository_to_path(request):
-    """Clone the selected repository to the specified path"""
+    """Clone the selected repository to the specified path or reuse existing one."""
     if request.method != "POST":
         return JsonResponse({"error": "Only POST allowed"}, status=405)
 
     try:
+        import subprocess
         data = json.loads(request.body)
         user_id = data.get('user_id')
         selected_path = data.get('selected_path')
@@ -366,20 +425,32 @@ def clone_repository_to_path(request):
         if not github_token.repository:
             return JsonResponse({"error": "Please select a repository first"}, status=400)
 
-        # Clone the repository
         repo_name = github_token.repository.split("/")[-1]
-        clone_path = os.path.join(selected_path, repo_name)
+        new_clone_path = os.path.join(selected_path, repo_name)
 
-        # Check if directory already exists
-        if os.path.exists(clone_path):
-            return JsonResponse({"error": f"Directory {clone_path} already exists"}, status=400)
+        # ✅ STEP 1: Check if this repo was already cloned
+        if github_token.clone_path and os.path.exists(github_token.clone_path):
+            return JsonResponse({
+                "status": "exists",
+                "message": f"Repository already cloned at {github_token.clone_path}",
+                "repo_path": github_token.clone_path
+            })
 
-        # Clone the repository using Git
+        # ✅ STEP 2: Clean up stale path in DB if it was deleted from disk
+        if github_token.clone_path and not os.path.exists(github_token.clone_path):
+            github_token.clone_path = None
+            github_token.save()
+
+        # ✅ STEP 3: Check if new path already exists
+        if os.path.exists(new_clone_path):
+            return JsonResponse({
+                "error": f"Directory {new_clone_path} already exists. Cannot clone here."
+            }, status=400)
+
+        # ✅ STEP 4: Clone the repository
         clone_url = f"https://{github_token.access_token}@github.com/{github_token.repository}.git"
-
-        import subprocess
         result = subprocess.run(
-            ["git", "clone", clone_url, clone_path],
+            ["git", "clone", clone_url, new_clone_path],
             capture_output=True,
             text=True
         )
@@ -387,13 +458,17 @@ def clone_repository_to_path(request):
         if result.returncode != 0:
             return JsonResponse({"error": f"Git clone failed: {result.stderr}"}, status=400)
 
-        # Store the path temporarily in the session
-        request.session['local_repo_path'] = clone_path
+        # ✅ STEP 5: Save new clone path
+        github_token.clone_path = new_clone_path
+        github_token.save()
+
+        # Store in session (optional)
+        request.session['local_repo_path'] = new_clone_path
 
         return JsonResponse({
             "status": "success",
             "message": "Repository cloned successfully",
-            "repo_path": clone_path
+            "repo_path": new_clone_path
         })
 
     except (User.DoesNotExist, GitHubToken.DoesNotExist):
@@ -402,7 +477,7 @@ def clone_repository_to_path(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
-    
+
 @csrf_exempt
 def run_testsuite(request):
     if request.method != "POST":

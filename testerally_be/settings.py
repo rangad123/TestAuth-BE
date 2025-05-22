@@ -171,4 +171,4 @@ CELERY_RESULT_SERIALIZER = "json"
 # settings.py
 GITHUB_CLIENT_ID = 'Ov23liCBUopMFwySDf5U'
 GITHUB_CLIENT_SECRET = 'd6c2ecdf544ba332aa0eeba97a777f7f50bd69f9'
-GITHUB_CALLBACK_URL = 'http://127.0.0.1:8000/api/github/callback'
+GITHUB_CALLBACK_URL = 'http://127.0.0.1:8000/integrate/github'

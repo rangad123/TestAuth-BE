@@ -165,6 +165,7 @@ class GitHubToken(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='github_token')
     access_token = models.CharField(max_length=255)
     repository = models.CharField(max_length=255, blank=True, null=True)  # Store selected repository
+    clone_path = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
