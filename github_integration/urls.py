@@ -1,9 +1,10 @@
 from . import views
+from .views import ProjectAPIView
 from django.urls import path
 
 urlpatterns = [
     path('create_testcase/', views.create_testcase, name='create_testcase'),
-    path('create_project/', views.create_project, name='create_testproject'),
+    path('project/', ProjectAPIView.as_view(), name='Project_View'),
     path('run_testsuite/', views.run_testsuite, name='run_testsuite'),
     path('run_testcase/', views.run_testcase, name='run_testcase'),
     path('get_testcase/<str:testcase_id>/<int:user_id>/', views.get_testcase, name='get_testcase'),

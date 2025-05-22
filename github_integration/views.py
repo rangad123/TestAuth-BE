@@ -11,6 +11,10 @@ from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from api.models import User, GitHubToken
 from api.models import *
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+import shutil
 import os
 import time
 from automation.views import *
@@ -137,60 +141,178 @@ from .github_test_storage import (
 )
 from api.models import GitHubToken
 
-@csrf_exempt
-def create_project(request):
-    """Create a new project folder and store metadata as JSON"""
-    if request.method != "POST":
-        return JsonResponse({"error": "Only POST allowed"}, status=405)
+class ProjectAPIView(APIView):
+    def post(self, request):
+        """Create a new project"""
+        try:
+            data = request.data
+            user_id = data.get("user_id")
+            project_name = data.get("project_name")
+            project_type = data.get("project_type")
+            description = data.get("description")
 
-    try:
-        data = json.loads(request.body)
-        user_id = data.get("user_id")
-        project_name = data.get("project_name")
-        project_type = data.get("project_type")
-        description = data.get("description")
+            if not user_id or not project_name:
+                return Response({"error": "Missing user_id or project_name"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not all([user_id, project_name, project_type, description]):
-            return JsonResponse({"error": "All fields are required"}, status=400)
+            user = User.objects.get(id=user_id)
+            github_token = GitHubToken.objects.get(user=user)
 
-        user = User.objects.get(id=user_id)
-        github_token = GitHubToken.objects.get(user=user)
+            if not github_token.clone_path or not os.path.exists(github_token.clone_path):
+                return Response({"error": "Repository not cloned yet or path is invalid"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not github_token.clone_path:
-            return JsonResponse({"error": "Repository not cloned"}, status=400)
+            main_project_folder = os.path.join(github_token.clone_path, "project")
+            os.makedirs(main_project_folder, exist_ok=True)
 
-        project_path = os.path.join(github_token.clone_path, project_name)
+            project_folder_name = f"{project_name}_project"
+            project_path = os.path.join(main_project_folder, project_folder_name)
 
-        if os.path.exists(project_path):
-            return JsonResponse({"error": f"Project '{project_name}' already exists"}, status=400)
+            if os.path.exists(project_path):
+                return Response({"error": f"Project '{project_folder_name}' already exists"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Create the project folder
-        os.makedirs(project_path)
+            os.makedirs(project_path)
 
-        # Save metadata as a JSON file
-        metadata = {
-            "project_name": project_name,
-            "project_type": project_type,
-            "description": description
-        }
+            metadata = {
+                "project_name": project_name,
+                "project_type": project_type,
+                "description": description
+            }
 
-        metadata_path = os.path.join(project_path, "project_info.json")
-        with open(metadata_path, "w") as f:
-            json.dump(metadata, f, indent=4)
+            metadata_path = os.path.join(project_path, "project_info.json")
+            with open(metadata_path, "w") as f:
+                json.dump(metadata, f, indent=4)
 
-        return JsonResponse({
-            "status": "success",
-            "message": f"Project '{project_name}' created with metadata",
-            "project_path": project_path
-        })
+            return Response({
+                "status": "success",
+                "message": f"Project '{project_folder_name}' created",
+                "project_path": project_path
+            }, status=status.HTTP_201_CREATED)
 
-    except (User.DoesNotExist, GitHubToken.DoesNotExist):
-        return JsonResponse({"error": "GitHub not connected for this user"}, status=404)
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
+        except (User.DoesNotExist, GitHubToken.DoesNotExist):
+            return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def get(self, request):
+        """List all projects for a user"""
+        user_id = request.query_params.get("user_id")
+
+        if not user_id:
+            return Response({"error": "Missing user_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(id=user_id)
+            github_token = GitHubToken.objects.get(user=user)
+            main_project_folder = os.path.join(github_token.clone_path, "project")
+
+            if not os.path.exists(main_project_folder):
+                return Response({"projects": []})
+
+            projects = []
+            for folder in os.listdir(main_project_folder):
+                project_dir = os.path.join(main_project_folder, folder)
+                metadata_file = os.path.join(project_dir, "project_info.json")
+
+                if os.path.isdir(project_dir) and os.path.exists(metadata_file):
+                    with open(metadata_file, "r") as f:
+                        metadata = json.load(f)
+                    metadata["folder_name"] = folder
+                    projects.append(metadata)
+
+            return Response({"projects": projects})
+
+        except (User.DoesNotExist, GitHubToken.DoesNotExist):
+            return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request):
+        """Update project name/type/description"""
+        try:
+            data = request.data
+            user_id = data.get("user_id")
+            current_project_name = data.get("project_name")
+            new_project_name = data.get("new_project_name")
+            new_project_type = data.get("project_type")
+            new_description = data.get("description")
+
+            if not user_id or not current_project_name:
+                return Response({"error": "Missing user_id or project_name"}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = User.objects.get(id=user_id)
+            github_token = GitHubToken.objects.get(user=user)
+            main_project_folder = os.path.join(github_token.clone_path, "project")
+            old_folder = f"{current_project_name}_project"
+            old_project_path = os.path.join(main_project_folder, old_folder)
+
+            if not os.path.exists(old_project_path):
+                return Response({"error": f"Project '{current_project_name}' not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            if new_project_name and new_project_name != current_project_name:
+                new_folder = f"{new_project_name}_project"
+                new_project_path = os.path.join(main_project_folder, new_folder)
+
+                if os.path.exists(new_project_path):
+                    return Response({"error": f"New project name '{new_folder}' already exists"}, status=status.HTTP_400_BAD_REQUEST)
+
+                os.rename(old_project_path, new_project_path)
+            else:
+                new_project_path = old_project_path
+
+            metadata_path = os.path.join(new_project_path, "project_info.json")
+            with open(metadata_path, "r") as f:
+                metadata = json.load(f)
+
+            if new_project_name:
+                metadata["project_name"] = new_project_name
+            if new_project_type:
+                metadata["project_type"] = new_project_type
+            if new_description:
+                metadata["description"] = new_description
+
+            with open(metadata_path, "w") as f:
+                json.dump(metadata, f, indent=4)
+
+            return Response({
+                "status": "success",
+                "message": "Project updated successfully"
+            })
+
+        except (User.DoesNotExist, GitHubToken.DoesNotExist):
+            return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request):
+        """Delete a project"""
+        try:
+            data = request.data
+            user_id = data.get("user_id")
+            project_name = data.get("project_name")
+
+            if not user_id or not project_name:
+                return Response({"error": "Missing user_id or project_name"}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = User.objects.get(id=user_id)
+            github_token = GitHubToken.objects.get(user=user)
+            project_folder_name = f"{project_name}_project"
+            project_path = os.path.join(github_token.clone_path, "project", project_folder_name)
+
+            if not os.path.exists(project_path):
+                return Response({"error": f"Project '{project_folder_name}' not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            shutil.rmtree(project_path)
+
+            return Response({
+                "status": "success",
+                "message": f"Project '{project_folder_name}' deleted successfully"
+            })
+
+        except (User.DoesNotExist, GitHubToken.DoesNotExist):
+            return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+       
+       
 @csrf_exempt
 def create_testcase(request):
     if request.method != "POST":
