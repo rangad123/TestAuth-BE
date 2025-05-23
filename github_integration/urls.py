@@ -6,10 +6,11 @@ urlpatterns = [
     path('testcase/', TestCaseView.as_view(), name='testcase_view'),
     path('project/', ProjectView.as_view(), name='Project_View'),
     path('teststep/', TestStepView.as_view(), name='Teststep_View'),
+    path('testsuite/', TestSuiteView.as_view(), name='Testsuite_View'),
+
 
     path('run_testsuite/', views.run_testsuite, name='run_testsuite'),
     path('run_testcase/', views.run_testcase, name='run_testcase'),
-    path('get_testcase/<str:testcase_id>/<int:user_id>/', views.get_testcase, name='get_testcase'),
     path('get_path/', views.get_available_paths, name='get_path'),
     path('clone_repo/', views.clone_repository_to_path, name='clone_repo'),
 

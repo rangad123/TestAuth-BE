@@ -1,7 +1,4 @@
 from django.shortcuts import render
-
-# Create your views here.
-
 import requests
 import base64
 import json
@@ -232,33 +229,33 @@ class ProjectView(APIView):
             user_id = data.get("user_id")
             current_project_name = data.get("project_name")
             new_project_name = data.get("new_project_name")
-            new_project_type = data.get("project_type")
-            new_description = data.get("description")
+            new_project_type = data.get("new_project_type")
+            new_description = data.get("new_description")
 
             if not user_id or not current_project_name:
                 return Response({"error": "Missing user_id or project_name"}, status=status.HTTP_400_BAD_REQUEST)
 
+            current_project_name = current_project_name.strip()
+            new_project_name = new_project_name.strip() if new_project_name else None
+
             user = User.objects.get(id=user_id)
             github_token = GitHubToken.objects.get(user=user)
             main_project_folder = os.path.join(github_token.clone_path, "project")
+
             old_folder = f"{current_project_name}_project"
             old_project_path = os.path.join(main_project_folder, old_folder)
 
             if not os.path.exists(old_project_path):
                 return Response({"error": f"Project '{current_project_name}' not found"}, status=status.HTTP_404_NOT_FOUND)
 
-            if new_project_name and new_project_name != current_project_name:
-                new_folder = f"{new_project_name}_project"
-                new_project_path = os.path.join(main_project_folder, new_folder)
+            # Define project path to use (old or new)
+            project_path_to_use = old_project_path
 
-                if os.path.exists(new_project_path):
-                    return Response({"error": f"New project name '{new_folder}' already exists"}, status=status.HTTP_400_BAD_REQUEST)
+            # Load and update metadata first
+            metadata_path = os.path.join(old_project_path, "project_info.json")
+            if not os.path.exists(metadata_path):
+                return Response({"error": "Metadata file not found"}, status=status.HTTP_404_NOT_FOUND)
 
-                os.rename(old_project_path, new_project_path)
-            else:
-                new_project_path = old_project_path
-
-            metadata_path = os.path.join(new_project_path, "project_info.json")
             with open(metadata_path, "r") as f:
                 metadata = json.load(f)
 
@@ -269,49 +266,32 @@ class ProjectView(APIView):
             if new_description:
                 metadata["description"] = new_description
 
+            # Write updated metadata to old location first
             with open(metadata_path, "w") as f:
                 json.dump(metadata, f, indent=4)
 
+            # Rename folder after successful metadata update
+            if new_project_name and new_project_name != current_project_name:
+                new_folder = f"{new_project_name}_project"
+                new_project_path = os.path.join(main_project_folder, new_folder)
+
+                if os.path.exists(new_project_path):
+                    return Response({"error": f"New project name '{new_folder}' already exists"}, status=status.HTTP_400_BAD_REQUEST)
+
+                os.rename(old_project_path, new_project_path)
+                project_path_to_use = new_project_path
+
             return Response({
                 "status": "success",
-                "message": "Project updated successfully"
+                "message": "Project updated successfully",
+                "project_path": project_path_to_use
             })
 
         except (User.DoesNotExist, GitHubToken.DoesNotExist):
             return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def delete(self, request):
-        """Delete a project"""
-        try:
-            data = request.data
-            user_id = data.get("user_id")
-            project_name = data.get("project_name")
-
-            if not user_id or not project_name:
-                return Response({"error": "Missing user_id or project_name"}, status=status.HTTP_400_BAD_REQUEST)
-
-            user = User.objects.get(id=user_id)
-            github_token = GitHubToken.objects.get(user=user)
-            project_folder_name = f"{project_name}_project"
-            project_path = os.path.join(github_token.clone_path, "project", project_folder_name)
-
-            if not os.path.exists(project_path):
-                return Response({"error": f"Project '{project_folder_name}' not found"}, status=status.HTTP_404_NOT_FOUND)
-
-            shutil.rmtree(project_path)
-
-            return Response({
-                "status": "success",
-                "message": f"Project '{project_folder_name}' deleted successfully"
-            })
-
-        except (User.DoesNotExist, GitHubToken.DoesNotExist):
-            return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-       
+        
 class TestCaseView(APIView):
     def post(self, request):
         try:
@@ -326,6 +306,9 @@ class TestCaseView(APIView):
 
             user = User.objects.get(id=user_id)
             github_token = GitHubToken.objects.get(user=user)
+
+            if not github_token.clone_path or not os.path.exists(github_token.clone_path):
+                return Response({"error": "Repository not cloned yet or path is invalid"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Define paths
             project_path = os.path.join(github_token.clone_path, "project", f"{project_name}_project")
@@ -494,6 +477,9 @@ class TestStepView(APIView):
 
             user = User.objects.get(id=user_id)
             github_token = GitHubToken.objects.get(user=user)
+
+            if not github_token.clone_path or not os.path.exists(github_token.clone_path):
+                return Response({"error": "Repository not cloned yet or path is invalid"}, status=status.HTTP_400_BAD_REQUEST)
 
             testcase_path = os.path.join(
                 github_token.clone_path,
@@ -676,6 +662,166 @@ class TestStepView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class TestSuiteView(APIView):
+    def post(self, request):
+        try:
+            user_id = request.data.get("user_id")
+            project_name = request.data.get("project_name")
+            title = request.data.get("title")
+            description = request.data.get("description", "")
+            pre_requisite = request.data.get("pre_requisite", "")
+            labels = request.data.get("labels", [])
+            testcase = request.data.get("testcase", [])
+
+            if not all([user_id, project_name, title]):
+                return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = User.objects.get(id=user_id)
+            github_token = GitHubToken.objects.get(user=user)
+
+            
+            # Check if project directory exists
+            project_dir = os.path.join(
+                github_token.clone_path,
+                "project",
+                f"{project_name}_project"
+            )
+            if not os.path.exists(project_dir):
+                return Response({"error": "Project folder does not exist"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Create testsuites directory only inside valid project
+            testsuite_dir = os.path.join(project_dir, "testsuites")
+            os.makedirs(testsuite_dir, exist_ok=True)
+
+            testsuite_path = os.path.join(testsuite_dir, f"{title}.json")
+            if os.path.exists(testsuite_path):
+                return Response({"error": "Test suite already exists"}, status=status.HTTP_400_BAD_REQUEST)
+
+            testsuite_data = {
+                "title": title,
+                "description": description,
+                "pre_requisite": pre_requisite,
+                "labels": labels,
+                "testcase": testcase
+            }
+
+            with open(testsuite_path, "w") as f:
+                json.dump(testsuite_data, f, indent=4)
+
+            return Response({"status": "success", "message": "Test suite created", "testsuite": testsuite_data}, status=status.HTTP_201_CREATED)
+
+        except (User.DoesNotExist, GitHubToken.DoesNotExist):
+            return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request):
+        try:
+            user_id = request.GET.get("user_id")
+            project_name = request.GET.get("project_name")
+            title = request.GET.get("title")
+
+            if not all([user_id, project_name, title]):
+                return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = User.objects.get(id=user_id)
+            github_token = GitHubToken.objects.get(user=user)
+
+            testsuite_path = os.path.join(
+                github_token.clone_path,
+                "project",
+                f"{project_name}_project",
+                "testsuites",
+                f"{title}.json"
+            )
+
+            if not os.path.exists(testsuite_path):
+                return Response({"error": "Test suite not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            with open(testsuite_path, "r") as f:
+                data = json.load(f)
+
+            return Response(data, status=status.HTTP_200_OK)
+
+        except (User.DoesNotExist, GitHubToken.DoesNotExist):
+            return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request):
+        try:
+            user_id = request.data.get("user_id")
+            project_name = request.data.get("project_name")
+            title = request.data.get("title")
+
+            if not all([user_id, project_name, title]):
+                return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = User.objects.get(id=user_id)
+            github_token = GitHubToken.objects.get(user=user)
+
+            testsuite_path = os.path.join(
+                github_token.clone_path,
+                "project",
+                f"{project_name}_project",
+                "testsuites",
+                f"{title}.json"
+            )
+
+            if not os.path.exists(testsuite_path):
+                return Response({"error": "Test suite not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            with open(testsuite_path, "r") as f:
+                data = json.load(f)
+
+            # Update only provided fields
+            data["description"] = request.data.get("description", data.get("description", ""))
+            data["pre_requisite"] = request.data.get("pre_requisite", data.get("pre_requisite", ""))
+            data["labels"] = request.data.get("labels", data.get("labels", []))
+            data["testcase"] = request.data.get("testcase", data.get("testcase", []))
+
+            with open(testsuite_path, "w") as f:
+                json.dump(data, f, indent=4)
+
+            return Response({"status": "success", "message": "Test suite updated"}, status=status.HTTP_200_OK)
+
+        except (User.DoesNotExist, GitHubToken.DoesNotExist):
+            return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request):
+        try:
+            user_id = request.data.get("user_id")
+            project_name = request.data.get("project_name")
+            title = request.data.get("title")
+
+            if not all([user_id, project_name, title]):
+                return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = User.objects.get(id=user_id)
+            github_token = GitHubToken.objects.get(user=user)
+
+            testsuite_path = os.path.join(
+                github_token.clone_path,
+                "project",
+                f"{project_name}_project",
+                "testsuites",
+                f"{title}.json"
+            )
+
+            if not os.path.exists(testsuite_path):
+                return Response({"error": "Test suite not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            os.remove(testsuite_path)
+
+            return Response({"status": "success", "message": "Test suite deleted"}, status=status.HTTP_200_OK)
+
+        except (User.DoesNotExist, GitHubToken.DoesNotExist):
+            return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
 @csrf_exempt
 def run_testcase(request):
@@ -685,16 +831,29 @@ def run_testcase(request):
     try:
         data = json.loads(request.body)
         user_id = data.get("user_id")
-        testcase_id = data.get("testcase_id")
+        project_name = data.get("project_name")
+        testcase_name = data.get("testcase_name")
 
-        if not user_id or not testcase_id:
-            return JsonResponse({"error": "Missing user_id or testcase_id"}, status=400)
+        if not user_id or not project_name or not testcase_name:
+            return JsonResponse({"error": "Missing user_id, project_name or testcase_name"}, status=400)
 
-        # Step 1: Load test case from GitHub
-        testcase = get_testcase_from_github(testcase_id, user_id)
+        # Get user and clone path
+        user = User.objects.get(id=user_id)
+        github_token = GitHubToken.objects.get(user=user)
+        clone_path = github_token.clone_path
 
-        if not testcase:
-            return JsonResponse({"error": "Failed to load test case from GitHub"}, status=404)
+        if not clone_path or not os.path.exists(clone_path):
+            return JsonResponse({"error": "Repository not cloned or invalid path"}, status=400)
+
+        # Construct path to testcase file
+        testcase_path = os.path.join(clone_path, "project", f"{project_name}_project", "testcases", f"{testcase_name}.json")
+
+        if not os.path.exists(testcase_path):
+            return JsonResponse({"error": "Test case file not found"}, status=404)
+
+        # Load testcase data
+        with open(testcase_path, "r") as f:
+            testcase = json.load(f)
 
         results = []
         steps = testcase.get("steps", [])
@@ -721,13 +880,14 @@ def run_testcase(request):
 
         return JsonResponse({
             "status": "success",
-            "testcase_id": testcase_id,
+            "testcase_name": testcase_name,
             "executed_steps": results
-        })
+        }, status=200)
 
+    except (User.DoesNotExist, GitHubToken.DoesNotExist):
+        return JsonResponse({"error": "GitHub not connected for this user"}, status=404)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
-    
 
 @csrf_exempt
 def create_testsuite(request):
