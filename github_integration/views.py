@@ -11,7 +11,9 @@ from api.models import *
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 import shutil
+import pandas as pd
 import os
 import time
 from automation.views import *
@@ -826,6 +828,67 @@ class TestSuiteView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+class ReportTestView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            user_id = request.data.get("user_id")
+            project_name = request.data.get("project_name")
+            testcase_name = request.data.get("testcase_name")
+
+            if not user_id or not project_name or not testcase_name:
+                return JsonResponse({"error": "Missing user_id, project_name or testcase_name"}, status=400)
+
+            user = User.objects.get(id=user_id)
+            github_token = GitHubToken.objects.get(user=user)
+            clone_path = github_token.clone_path
+
+            if not clone_path or not os.path.exists(clone_path):
+                return JsonResponse({"error": "Repository not cloned or invalid path"}, status=400)
+
+            testcase_path = os.path.join(clone_path, "project", f"{project_name}_project", "testcases", f"{testcase_name}.json")
+
+            if not os.path.exists(testcase_path):
+                return JsonResponse({"error": "Test case file not found"}, status=404)
+
+            # Load test case data
+            with open(testcase_path, "r") as f:
+                testcase = json.load(f)
+
+            steps = testcase.get("steps", [])
+
+            # Prepare report folder
+            report_folder = os.path.join(clone_path, "project", f"{project_name}_project", "report")
+            os.makedirs(report_folder, exist_ok=True)
+
+            # Prepare Excel data
+            report_data = []
+            for i, step in enumerate(steps):
+                report_data.append({
+                    "Step Number": i + 1,
+                    "Command": step.get("step_description", ""),
+                    "Click X": step.get("step_coordinates", {}).get("click_x", ""),
+                    "Click Y": step.get("step_coordinates", {}).get("click_y", ""),
+                    "Performed Output": step.get("performed_output", ""),
+                    "Result": step.get("teststep_result", "Not Executed")
+                })
+
+            df = pd.DataFrame(report_data)
+
+            # Save Excel report
+            report_path = os.path.join(report_folder, f"{testcase_name}.xlsx")
+            df.to_excel(report_path, index=False)
+
+            return JsonResponse({
+                "status": "success",
+                "report_path": report_path
+            }, status=200)
+
+        except (User.DoesNotExist, GitHubToken.DoesNotExist):
+            return JsonResponse({"error": "GitHub not connected for this user"}, status=404)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
 
 @csrf_exempt
 def run_testcase(request):
@@ -876,11 +939,33 @@ def run_testcase(request):
                 is_final_step=is_final
             )
 
+            # Improved pass/fail logic:
+            teststep_result = "passed"
+            message = ""
+            if isinstance(result, dict):
+                status_str = result.get("status", "").lower()
+                if result.get("error") or "fail" in status_str or "exception" in status_str:
+                    teststep_result = "failed"
+                    message = result.get("error", "Step failed")
+                else:
+                    message = result.get("status", "Success")
+            else:
+                # If result is not dict, you can decide pass/fail accordingly
+                message = str(result)
+
+            step["teststep_result"] = teststep_result
+            step["performed_output"] = message
+            
+
             results.append({
                 "step_number": i + 1,
                 "command": command,
                 "response": result
             })
+
+        # ✅ Save updated teststep_result values
+        with open(testcase_path, "w") as f:
+            json.dump(testcase, f, indent=4)
 
         return JsonResponse({
             "status": "success",
