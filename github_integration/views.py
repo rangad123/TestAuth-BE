@@ -317,7 +317,6 @@ class TestCaseView(APIView):
 
             # Save initial testcase data
             testcase_data = {
-                "project_name":project_name,
                 "testcase_name": testcase_name,
                 "testcase_type": testcase_type,
                 "testcase_priority": testcase_priority,
@@ -338,6 +337,7 @@ class TestCaseView(APIView):
         
         user_id = request.GET.get("user_id")
         project_name = request.GET.get("project_name")
+        testcase_name=request.GET.get("testcase_name")
 
         if not user_id or not project_name:
             return Response({"error": "Missing user_id or project_name"}, status=status.HTTP_400_BAD_REQUEST)
@@ -357,6 +357,17 @@ class TestCaseView(APIView):
             if not os.path.exists(testcases_dir):
                 return Response({"testcases": []})
 
+            #  If a specific testcase is requested
+            if testcase_name:
+                testcase_path = os.path.join(testcases_dir, f"{testcase_name}.json")
+                if not os.path.exists(testcase_path):
+                    return Response({"error": f"Test case '{testcase_name}' not found"}, status=status.HTTP_404_NOT_FOUND)
+                with open(testcase_path, "r") as f:
+                    data = json.load(f)
+                    data["filename"] = f"{testcase_name}.json"
+                    return Response({"testcase": data}, status=status.HTTP_200_OK)
+
+            #  Return all testcases
             testcases = []
             for file in os.listdir(testcases_dir):
                 if file.endswith(".json"):
