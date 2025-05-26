@@ -472,7 +472,7 @@ class TestStepView(APIView):
             user_id = request.data.get("user_id")
             project_name = request.data.get("project_name")
             testcase_name = request.data.get("testcase_name")
-            steps = request.data.get("steps")  # List of steps with 'step_number' and 'step_description'
+            steps = request.data.get("steps")
 
             if not all([user_id, project_name, testcase_name, steps]):
                 return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
@@ -503,37 +503,31 @@ class TestStepView(APIView):
             if "steps" not in testcase_data:
                 testcase_data["steps"] = []
 
-            # Validate incoming steps
-            incoming_step_numbers = set()
+            # Validate new steps
             for step in steps:
                 if not all(k in step for k in ("step_number", "step_description")):
                     return Response({"error": "Each step must include 'step_number' and 'step_description'"}, status=status.HTTP_400_BAD_REQUEST)
 
-                step_number = step["step_number"]
-                if not isinstance(step_number, int):
-                    return Response({"error": f"Invalid step_number type: {step_number}"}, status=status.HTTP_400_BAD_REQUEST)
-
-                if step_number in incoming_step_numbers:
-                    return Response({"error": f"Duplicate step_number in request: {step_number}"}, status=status.HTTP_400_BAD_REQUEST)
-
-                incoming_step_numbers.add(step_number)
-
-            # Add steps
+            existing_steps = testcase_data["steps"]
+            new_steps = []
             for step in steps:
-                new_step = {
+                new_steps.append({
                     "step_number": step["step_number"],
                     "step_description": step["step_description"],
                     "teststep_result": step.get("teststep_result", "not_executed"),
                     "step_coordinates": step.get("step_coordinates", {})
-                }
-                testcase_data["steps"].append(new_step)
+                })
 
-            # Sort steps and reassign step_numbers
-            sorted_steps = sorted(testcase_data["steps"], key=lambda x: x["step_number"])
-            for idx, step in enumerate(sorted_steps, start=1):
+            # Insert each new step at its position
+            for new_step in new_steps:
+                insert_at = new_step["step_number"] - 1
+                existing_steps.insert(insert_at, new_step)
+
+            # Reassign step_numbers
+            for idx, step in enumerate(existing_steps, start=1):
                 step["step_number"] = idx
 
-            testcase_data["steps"] = sorted_steps
+            testcase_data["steps"] = existing_steps
 
             with open(testcase_path, "w") as f:
                 json.dump(testcase_data, f, indent=4)
