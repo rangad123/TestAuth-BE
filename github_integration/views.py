@@ -472,9 +472,8 @@ class TestStepView(APIView):
             user_id = request.data.get("user_id")
             project_name = request.data.get("project_name")
             testcase_name = request.data.get("testcase_name")
-            steps = request.data.get("steps")  # Expecting a list of steps for bulk add
+            steps = request.data.get("steps")  # List of steps with 'step_number' and 'step_description'
 
-            # Validate required fields
             if not all([user_id, project_name, testcase_name, steps]):
                 return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -504,22 +503,22 @@ class TestStepView(APIView):
             if "steps" not in testcase_data:
                 testcase_data["steps"] = []
 
-            existing_step_numbers = {step["step_number"] for step in testcase_data["steps"]}
-
-            # Check duplicates in incoming steps and existing steps
+            # Validate incoming steps
             incoming_step_numbers = set()
             for step in steps:
-                # Validate each step fields
                 if not all(k in step for k in ("step_number", "step_description")):
                     return Response({"error": "Each step must include 'step_number' and 'step_description'"}, status=status.HTTP_400_BAD_REQUEST)
 
                 step_number = step["step_number"]
-                if step_number in existing_step_numbers or step_number in incoming_step_numbers:
-                    return Response({"error": f"Duplicate step_number found: {step_number}"}, status=status.HTTP_400_BAD_REQUEST)
+                if not isinstance(step_number, int):
+                    return Response({"error": f"Invalid step_number type: {step_number}"}, status=status.HTTP_400_BAD_REQUEST)
+
+                if step_number in incoming_step_numbers:
+                    return Response({"error": f"Duplicate step_number in request: {step_number}"}, status=status.HTTP_400_BAD_REQUEST)
 
                 incoming_step_numbers.add(step_number)
 
-            # Add steps with defaults if missing keys
+            # Add steps
             for step in steps:
                 new_step = {
                     "step_number": step["step_number"],
@@ -529,13 +528,17 @@ class TestStepView(APIView):
                 }
                 testcase_data["steps"].append(new_step)
 
-            # Sort steps by step_number
-            testcase_data["steps"].sort(key=lambda x: x["step_number"])
+            # Sort steps and reassign step_numbers
+            sorted_steps = sorted(testcase_data["steps"], key=lambda x: x["step_number"])
+            for idx, step in enumerate(sorted_steps, start=1):
+                step["step_number"] = idx
+
+            testcase_data["steps"] = sorted_steps
 
             with open(testcase_path, "w") as f:
                 json.dump(testcase_data, f, indent=4)
 
-            return Response({"status": "success", "message": "Test steps added", "steps": steps}, status=status.HTTP_201_CREATED)
+            return Response({"status": "success", "message": "Test steps added", "steps": testcase_data["steps"]}, status=status.HTTP_201_CREATED)
 
         except (User.DoesNotExist, GitHubToken.DoesNotExist):
             return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)
@@ -652,11 +655,17 @@ class TestStepView(APIView):
             with open(testcase_path, "r") as f:
                 testcase_data = json.load(f)
 
-            original_count = len(testcase_data.get("steps", []))
-            testcase_data["steps"] = [step for step in testcase_data.get("steps", []) if step["step_number"] != step_number]
+            original_steps = testcase_data.get("steps", [])
+            filtered_steps = [step for step in original_steps if step["step_number"] != step_number]
 
-            if len(testcase_data["steps"]) == original_count:
+            if len(filtered_steps) == len(original_steps):
                 return Response({"error": "Step number not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            # Reassign step numbers
+            for idx, step in enumerate(filtered_steps, start=1):
+                step["step_number"] = idx
+
+            testcase_data["steps"] = filtered_steps
 
             with open(testcase_path, "w") as f:
                 json.dump(testcase_data, f, indent=4)
@@ -667,7 +676,7 @@ class TestStepView(APIView):
             return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+        
 class TestSuiteView(APIView):
     def post(self, request):
         try:
