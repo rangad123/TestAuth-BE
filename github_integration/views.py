@@ -3,7 +3,7 @@ import requests
 import base64
 import json
 from django.shortcuts import redirect
-from django.http import JsonResponse,HttpRequest
+from django.http import JsonResponse,HttpRequest,FileResponse
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from api.models import User, GitHubToken
@@ -670,7 +670,7 @@ class TestStepView(APIView):
             return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
 class TestSuiteView(APIView):
     def post(self, request):
         try:
@@ -890,6 +890,46 @@ class ReportTestView(APIView):
 
         except (User.DoesNotExist, GitHubToken.DoesNotExist):
             return JsonResponse({"error": "GitHub not connected for this user"}, status=404)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+        
+    def get(self, request):
+        try:
+            user_id = request.query_params.get("user_id")
+            project_name = request.query_params.get("project_name")
+            testcase_name = request.query_params.get("testcase_name")
+
+            if not user_id or not project_name or not testcase_name:
+                return JsonResponse({"error": "Missing user_id, project_name or testcase_name"}, status=400)
+
+            user = User.objects.get(id=user_id)
+            github_token = GitHubToken.objects.get(user=user)
+            clone_path = github_token.clone_path
+
+            if not clone_path or not os.path.exists(clone_path):
+                return JsonResponse({"error": "Repository not cloned or invalid path"}, status=400)
+
+            report_path = os.path.join(
+                clone_path,
+                "project",
+                f"{project_name}_project",
+                "report",
+                f"{testcase_name}.xlsx"
+            )
+
+            if not os.path.exists(report_path):
+                return JsonResponse({"error": "Report not found"}, status=404)
+
+            # return FileResponse(open(report_path, "rb"), as_attachment=True, filename=f"{testcase_name}.xlsx")
+            return JsonResponse({
+            "status": "success",
+            "report_path": report_path  # Frontend can use this to download
+        }, status=200)
+
+        except User.DoesNotExist:
+            return JsonResponse({"error": "User not found"}, status=404)
+        except GitHubToken.DoesNotExist:
+            return JsonResponse({"error": "GitHub token not found for user"}, status=404)
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
 
