@@ -728,29 +728,44 @@ class TestSuiteView(APIView):
         try:
             user_id = request.GET.get("user_id")
             project_name = request.GET.get("project_name")
-            title = request.GET.get("title")
+            title = request.GET.get("title")  # optional
 
-            if not all([user_id, project_name, title]):
+            if not all([user_id, project_name]):
                 return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
 
             user = User.objects.get(id=user_id)
             github_token = GitHubToken.objects.get(user=user)
 
-            testsuite_path = os.path.join(
+            testsuite_dir = os.path.join(
                 github_token.clone_path,
                 "project",
                 f"{project_name}_project",
-                "testsuites",
-                f"{title}.json"
+                "testsuites"
             )
 
-            if not os.path.exists(testsuite_path):
-                return Response({"error": "Test suite not found"}, status=status.HTTP_404_NOT_FOUND)
+            if not os.path.exists(testsuite_dir):
+                return Response({"error": "Testsuite folder not found"}, status=status.HTTP_404_NOT_FOUND)
 
-            with open(testsuite_path, "r") as f:
-                data = json.load(f)
+            # If title is provided, return specific testsuite
+            if title:
+                testsuite_path = os.path.join(testsuite_dir, f"{title}.json")
+                if not os.path.exists(testsuite_path):
+                    return Response({"error": "Test suite not found"}, status=status.HTTP_404_NOT_FOUND)
 
-            return Response(data, status=status.HTTP_200_OK)
+                with open(testsuite_path, "r") as f:
+                    data = json.load(f)
+
+                return Response(data, status=status.HTTP_200_OK)
+
+            # If title is not provided, return all testsuites in folder
+            all_testsuites = []
+            for file_name in os.listdir(testsuite_dir):
+                if file_name.endswith(".json"):
+                    with open(os.path.join(testsuite_dir, file_name), "r") as f:
+                        testsuite_data = json.load(f)
+                        all_testsuites.append(testsuite_data)
+
+            return Response({"testsuites": all_testsuites}, status=status.HTTP_200_OK)
 
         except (User.DoesNotExist, GitHubToken.DoesNotExist):
             return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)

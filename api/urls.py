@@ -1,7 +1,8 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
+from rest_framework_simplejwt.views import TokenRefreshView
 from .views import ProjectViewSet,TestCaseViewSet,TestSuiteViewSet,RequirementViewSet
-from .views import RegisterView, LoginView, ForgotPasswordView, ResetPasswordView
+from .views import RegisterView, LoginView, ForgotPasswordView, ResetPasswordView,ProtectedView
 from .views import TestCaseTypeViewSet, TestCasePriorityViewSet, RequirementTypeViewSet, SendInvitationView, AcceptInvitationView, TestStepViewSet
 from .views import UserListView, ProjectListView, TestCaseListView, TestSuiteListView, RequirementListView, RoleView, ProjectMemberDetailsView
 from .views import OrganizationView, OrganizationProjectsView, ProjectMembersView, TestDataView, UserProjectDataView, OrganizationProjectDetailsView
@@ -20,6 +21,8 @@ router.register(r'teststeps', TestStepViewSet,basename='teststeps')
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('protect/', ProtectedView.as_view(), name='ProtectedView'),
     path('forgotPassword/', ForgotPasswordView.as_view(), name='forgotPassword'),
     path('resetPassword/', ResetPasswordView.as_view(), name='resetPassword'),
     path('admin/users/', UserListView.as_view(), name='user-list'),
