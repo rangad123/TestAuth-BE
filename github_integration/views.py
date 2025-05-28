@@ -286,7 +286,36 @@ class ProjectView(APIView):
             return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+    
+    def delete(self, request):
+        """Delete a project"""
+        try:
+            data = request.data
+            user_id = data.get("user_id")
+            project_name = data.get("project_name")
+
+            if not user_id or not project_name:
+                return Response({"error": "Missing user_id or project_name"}, status=status.HTTP_400_BAD_REQUEST)
+
+            user = User.objects.get(id=user_id)
+            github_token = GitHubToken.objects.get(user=user)
+            project_folder_name = f"{project_name}_project"
+            project_path = os.path.join(github_token.clone_path, "project", project_folder_name)
+
+            if not os.path.exists(project_path):
+                return Response({"error": f"Project '{project_folder_name}' not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            shutil.rmtree(project_path)
+
+            return Response({
+                "status": "success",
+                "message": f"Project '{project_folder_name}' deleted successfully"
+            })
+
+        except (User.DoesNotExist, GitHubToken.DoesNotExist):
+            return Response({"error": "GitHub not connected for this user"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 class TestCaseView(APIView):
     def post(self, request):
         try:
