@@ -7,7 +7,9 @@ urlpatterns = [
     path('project/', ProjectView.as_view(), name='Project_View'),
     path('teststep/', TestStepView.as_view(), name='Teststep_View'),
     path('testsuite/', TestSuiteView.as_view(), name='Testsuite_View'),
-    path('test_report/', ReportTestView.as_view(), name='Report_View'),
+    path('case_report/', ReportTestCaseView.as_view(), name='ReportCase_View'),
+    path('suite_report/', ReportTestSuiteView.as_view(), name='ReportSuite_View'),
+
 
 
     path('run_testsuite/', views.run_testsuite, name='run_testsuite'),

@@ -846,7 +846,7 @@ class TestSuiteView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-class ReportTestView(APIView):
+class ReportTestCaseView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -947,6 +947,77 @@ class ReportTestView(APIView):
             return JsonResponse({"error": "GitHub token not found for user"}, status=404)
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=500)
+
+class ReportTestSuiteView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            user_id = request.data.get("user_id")
+            project_name = request.data.get("project_name")
+            testsuite_name = request.data.get("testsuite_name")
+
+            if not user_id or not project_name or not testsuite_name:
+                return JsonResponse({"error": "Missing user_id, project_name or testsuite_name"}, status=400)
+
+            user = User.objects.get(id=user_id)
+            github_token = GitHubToken.objects.get(user=user)
+            clone_path = github_token.clone_path
+
+            testsuite_path = os.path.join(clone_path, "project", f"{project_name}_project", "testsuites", f"{testsuite_name}.json")
+            if not os.path.exists(testsuite_path):
+                return JsonResponse({"error": "Test suite not found"}, status=404)
+
+            with open(testsuite_path, "r") as f:
+                testsuite = json.load(f)
+
+            testcase_names = testsuite.get("testcase", [])
+            if not testcase_names:
+                return JsonResponse({"error": "No testcases found in suite"}, status=400)
+
+            # Prepare report folder
+            report_folder = os.path.join(clone_path, "project", f"{project_name}_project", "report")
+            # Create the report folder if it doesn't exist
+            if not os.path.exists(report_folder):
+                os.makedirs(report_folder, exist_ok=True)
+
+
+            all_report_data = []
+            for testcase_name in testcase_names:
+                testcase_path = os.path.join(clone_path, "project", f"{project_name}_project", "testcases", f"{testcase_name}.json")
+                if not os.path.exists(testcase_path):
+                    continue  # Skip missing test cases
+
+                with open(testcase_path, "r") as f:
+                    testcase = json.load(f)
+
+                steps = testcase.get("steps", [])
+                for i, step in enumerate(steps):
+                    all_report_data.append({
+                        "Test Case": testcase_name,
+                        "Step Number": i + 1,
+                        "Command": step.get("step_description", ""),
+                        "Click X": step.get("step_coordinates", {}).get("click_x", ""),
+                        "Click Y": step.get("step_coordinates", {}).get("click_y", ""),
+                        "Performed Output": step.get("performed_output", ""),
+                        "Result": step.get("teststep_result", "Not Executed")
+                    })
+
+            df = pd.DataFrame(all_report_data)
+            report_path = os.path.join(report_folder, f"{testsuite_name}_suite_report.xlsx")
+            df.to_excel(report_path, index=False)
+
+            return JsonResponse({
+                "status": "success",
+                "report_path": report_path
+            }, status=200)
+
+        except (User.DoesNotExist, GitHubToken.DoesNotExist):
+            return JsonResponse({"error": "GitHub not connected for this user"}, status=404)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+
 
 @csrf_exempt
 def run_testcase(request):
@@ -1182,7 +1253,6 @@ def run_testsuite(request):
             testsuite = json.load(f)
 
         testcase_names = testsuite.get("testcase", [])
-        
         if not testcase_names:
             return JsonResponse({"error": "No testcases found in the testsuite"}, status=400)
 
@@ -1196,13 +1266,10 @@ def run_testsuite(request):
             "testcases": []
         }
 
-        # Execute each testcase in the suite
         for case_index, testcase_name in enumerate(testcase_names):
-            # Add wait between testcases (except for the first one)
             if case_index > 0:
                 time.sleep(wait_between_cases / 1000)
 
-            # Construct path to testcase file
             testcase_path = os.path.join(
                 clone_path,
                 "project",
@@ -1220,9 +1287,12 @@ def run_testsuite(request):
                 })
                 continue
 
-            # Load testcase data
             with open(testcase_path, "r") as f:
                 testcase = json.load(f)
+
+            steps = testcase.get("steps", [])
+            total_cases = len(testcase_names)
+            total_steps = len(steps)
 
             case_result = {
                 "testcase_name": testcase_name,
@@ -1231,13 +1301,7 @@ def run_testsuite(request):
                 "steps": []
             }
 
-            steps = testcase.get("steps", [])
-            total_cases = len(testcase_names)
-            total_steps = len(steps)
-
-            # Execute each step in the testcase
             for step_index, step in enumerate(steps):
-                # Add wait between steps (except for the first one)
                 if step_index > 0:
                     time.sleep(wait_between_steps / 1000)
 
@@ -1246,8 +1310,6 @@ def run_testsuite(request):
                 coordinates = step.get("step_coordinates", {})
                 click_x = coordinates.get("click_x", 0)
                 click_y = coordinates.get("click_y", 0)
-                
-                # Check if this is the final step of the final testcase
                 is_final_step = (case_index == total_cases - 1) and (step_index == total_steps - 1)
 
                 try:
@@ -1259,18 +1321,24 @@ def run_testsuite(request):
                         is_final_step=is_final_step
                     )
 
-                    # Determine if step passed based on response
-                    is_successful = (
-                        response.get('status') == 'success' or
-                        'browser opened' in str(response.get('status', '')).lower() or
-                        'click performed' in str(response.get('status', '')).lower() or
-                        'type performed' in str(response.get('status', '')).lower() or
-                        'verify performed' in str(response.get('status', '')).lower() or
-                        'get performed' in str(response.get('status', '')).lower()
-                    )
-                    
-                    step_result = 'passed' if is_successful else 'failed'
-                    
+                    # Determine result
+                    step_result = "passed"
+                    message = ""
+
+                    if isinstance(response, dict):
+                        status_str = response.get("status", "").lower()
+                        if response.get("error") or "fail" in status_str or "exception" in status_str:
+                            step_result = "failed"
+                            message = response.get("error", "Step failed")
+                        else:
+                            message = response.get("status", "Success")
+                    else:
+                        message = str(response)
+
+                    # Update in testcase file
+                    step["teststep_result"] = step_result
+                    step["performed_output"] = message
+
                     case_result["steps"].append({
                         "step_number": step_number,
                         "step_description": command,
@@ -1280,6 +1348,9 @@ def run_testsuite(request):
                     })
 
                 except Exception as e:
+                    step["teststep_result"] = "failed"
+                    step["performed_output"] = str(e)
+
                     case_result["steps"].append({
                         "step_number": step_number,
                         "step_description": command,
@@ -1289,10 +1360,13 @@ def run_testsuite(request):
                         "response": None
                     })
 
-            # Calculate testcase summary
+            # Save updated test case with result/performed_output
+            with open(testcase_path, "w") as f:
+                json.dump(testcase, f, indent=4)
+
             passed_steps = sum(1 for s in case_result["steps"] if s["result"] == "passed")
             total_step_count = len(case_result["steps"])
-            
+
             case_result["summary"] = {
                 "total_steps": total_step_count,
                 "passed_steps": passed_steps,
@@ -1302,7 +1376,6 @@ def run_testsuite(request):
 
             results["testcases"].append(case_result)
 
-        # Calculate overall testsuite summary
         total_cases = len(results["testcases"])
         passed_cases = sum(1 for case in results["testcases"] if case.get("summary", {}).get("status") == "passed")
         failed_cases = total_cases - passed_cases
@@ -1332,7 +1405,7 @@ def run_testsuite(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON format"}, status=400)
     except Exception as e:
-        return JsonResponse({"error": f"Unexpected error: {str(e)}"}, status=500)
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 def Execute_command_internal(command, user_id, click_x, click_y, is_final_step):
