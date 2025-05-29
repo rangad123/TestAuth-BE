@@ -106,7 +106,6 @@ class RegisterView(APIView):
         )
 
 
-
 #Login View Api
 class LoginView(APIView):
     def post(self, request):

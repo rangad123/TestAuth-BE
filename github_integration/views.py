@@ -2,6 +2,7 @@ from django.shortcuts import render
 import requests
 import base64
 import json
+from rest_framework.decorators import api_view
 from django.shortcuts import redirect
 from django.http import JsonResponse,HttpRequest,FileResponse
 from django.conf import settings
@@ -19,6 +20,46 @@ import time
 from automation.views import *
 from .git_sync import sync_and_push
 
+@api_view(['GET'])
+def check_github_connection(request):
+    user_id = request.query_params.get("user_id")
+    if not user_id:
+        return Response({"error": "user_id is required"}, status=400)
+
+    try:
+        user = User.objects.get(id=user_id)
+        token = GitHubToken.objects.get(user=user)
+        return Response({
+            "connected": True,
+            "repository": token.repository,
+            "branch": token.branch_name
+        })
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
+    except GitHubToken.DoesNotExist:
+        return Response({"connected": False})
+
+
+@api_view(['GET'])
+def check_clone_status(request):
+    user_id = request.query_params.get("user_id")
+    if not user_id:
+        return Response({"error": "user_id is required"}, status=400)
+
+    try:
+        user = User.objects.get(id=user_id)
+        token = GitHubToken.objects.get(user=user)
+        if token.clone_path:
+            return Response({
+                "cloned": True,
+                "clone_path": token.clone_path
+            })
+        else:
+            return Response({"cloned": False})
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
+    except GitHubToken.DoesNotExist:
+        return Response({"error": "GitHub not connected"}, status=400)
 
 @csrf_exempt
 def github_login(request):

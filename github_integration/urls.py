@@ -9,6 +9,10 @@ urlpatterns = [
     path('testsuite/', TestSuiteView.as_view(), name='Testsuite_View'),
     path('case_report/', ReportTestCaseView.as_view(), name='ReportCase_View'),
     path('suite_report/', ReportTestSuiteView.as_view(), name='ReportSuite_View'),
+    path('git_status/', views.check_github_connection, name='check_github_connection'),
+    path('clone_status/', views.check_clone_status, name='check_clone_status'),
+
+
 
 
 
