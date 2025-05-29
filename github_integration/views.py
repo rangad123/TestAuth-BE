@@ -17,6 +17,7 @@ import pandas as pd
 import os
 import time
 from automation.views import *
+from .git_sync import sync_and_push
 
 
 @csrf_exempt
@@ -1451,3 +1452,18 @@ def Execute_command_internal(command, user_id, click_x, click_y, is_final_step):
     fake_request._body = json.dumps(request_data).encode("utf-8")
 
     return json.loads(Execute_command(fake_request).content.decode())
+
+@csrf_exempt
+def github_sync(request):
+    """API endpoint to trigger git sync for a user."""
+    if request.method != "POST":
+        return JsonResponse({"error": "Only POST allowed"}, status=405)
+    try:
+        data = json.loads(request.body)
+        user_id = data.get('user_id')
+        if not user_id:
+            return JsonResponse({"error": "Missing user_id"}, status=400)
+        result = sync_and_push(user_id)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)

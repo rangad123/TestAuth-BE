@@ -162,12 +162,21 @@ class RequirementType(models.Model):
 # api/models.py (Add to existing file)
 
 class GitHubToken(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='github_token')
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
     access_token = models.CharField(max_length=255)
     repository = models.CharField(max_length=255, blank=True, null=True)  # Store selected repository
-    clone_path = models.TextField(blank=True, null=True)
+    clone_path = models.CharField(max_length=255, null=True, blank=True)
+    branch_name = models.CharField(max_length=255, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"GitHub Token for {self.user.email}"
+
+class GitSyncLog(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    action = models.CharField(max_length=255)
+    status = models.CharField(max_length=50)
+    message = models.TextField()
+    pr_url = models.URLField(null=True, blank=True)

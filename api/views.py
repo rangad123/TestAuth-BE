@@ -712,7 +712,6 @@ class AcceptInvitationView(APIView):
                     {"error": "Role ID is required."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
             user = User.objects.create(
                 name=data['name'],
                 email=invitation.recipient_email,
@@ -721,6 +720,20 @@ class AcceptInvitationView(APIView):
                 country=data.get('country', ''),
                 role_id=data['roleid']  # Create user with the given roleid
             )
+
+            # --- NEW: Map GitHub repo and branch for the new member ---
+            from api.models import GitHubToken
+            try:
+                inviter_token = GitHubToken.objects.get(user=invitation.invite_by)
+                branch_name = f"member_{user.id}"
+                GitHubToken.objects.create(
+                    user=user,
+                    access_token=inviter_token.access_token,
+                    repository=inviter_token.repository,
+                    branch_name=branch_name
+                )
+            except GitHubToken.DoesNotExist:
+                pass  # Optionally, handle if inviter has not connected GitHub
 
         # Add user to project members
         ProjectMember.objects.create(
