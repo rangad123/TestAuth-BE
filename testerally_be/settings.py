@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
+from decouple import config # type: ignore
 
 REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
 # Base directory
@@ -168,7 +169,6 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 
-# settings.py
-GITHUB_CLIENT_ID = 'Ov23liCBUopMFwySDf5U'
-GITHUB_CLIENT_SECRET = 'd6c2ecdf544ba332aa0eeba97a777f7f50bd69f9'
-GITHUB_CALLBACK_URL = 'http://127.0.0.1:8000/integrate/github'
+GITHUB_CLIENT_ID = config('GITHUB_CLIENT_ID')
+GITHUB_CLIENT_SECRET = config('GITHUB_CLIENT_SECRET')
+GITHUB_CALLBACK_URL = config('GITHUB_CALLBACK_URL')
