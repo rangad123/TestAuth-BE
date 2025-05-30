@@ -14,7 +14,7 @@ urlpatterns = [
 
     
 
-    #re_path(r'^react_app/.*$', views.react_app, name='react_app'),
+    re_path(r'^react_app/.*$', views.react_app, name='react_app'),
 
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
