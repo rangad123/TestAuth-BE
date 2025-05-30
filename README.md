@@ -4,7 +4,7 @@
 
 TesterAlly Backend is a Django-based REST API application designed to manage the backend functionalities for the TesterAlly platform. It uses Django REST Framework (DRF) for building APIs and supports secure JWT-based authentication.
 
-For a complete understanding of the platform flow, refer to the [Workflow Documentation](./docs/TesterAlly_Agent_Workflow_Documentation.docx).
+For a complete understanding of the platform flow, refer to the [Workflow Documentation](./Documents/TesterAlly_Agent_Workflow_Documentation.docx).
 
 ---
 
