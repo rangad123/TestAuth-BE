@@ -27,7 +27,7 @@ urlpatterns = [
     
     # GitHub Integration URLs
     path('github/login/', views.github_login, name='github_login'),
-    path('github/', views.github_callback, name='github_callback'),
+    path('integrate/github/callback/', views.github_callback, name='github_callback'),
     path('github/repositories/', views.list_repositories, name='list_repositories'),
     path('github/select_repository/', views.select_repository, name='select_repository'),
     path('github/sync/', views.github_sync, name='github_sync'),
